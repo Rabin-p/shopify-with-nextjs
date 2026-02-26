@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 
 type RegisterResponse = {
@@ -11,20 +12,30 @@ type RegisterResponse = {
   message?: string;
 };
 
+type RegisterFormValues = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+};
+
 export default function RegisterPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<RegisterFormValues>();
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const onSubmit = async ({
+    firstName,
+    lastName,
+    email,
+    password,
+  }: RegisterFormValues) => {
     setError(null);
-    setIsSubmitting(true);
 
     try {
       const response = await fetch("/api/auth/register", {
@@ -45,8 +56,6 @@ export default function RegisterPage() {
       router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -57,14 +66,13 @@ export default function RegisterPage() {
         Register from this storefront to sign in and view your account.
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block space-y-2">
             <span className="text-sm font-medium">First name</span>
             <input
               type="text"
-              value={firstName}
-              onChange={(event) => setFirstName(event.target.value)}
+              {...register("firstName")}
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
               autoComplete="given-name"
             />
@@ -74,8 +82,7 @@ export default function RegisterPage() {
             <span className="text-sm font-medium">Last name</span>
             <input
               type="text"
-              value={lastName}
-              onChange={(event) => setLastName(event.target.value)}
+              {...register("lastName")}
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
               autoComplete="family-name"
             />
@@ -86,27 +93,36 @@ export default function RegisterPage() {
           <span className="text-sm font-medium">Email</span>
           <input
             type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            {...register("email", {
+              required: "Email is required.",
+            })}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
             placeholder="you@example.com"
-            required
             autoComplete="email"
           />
+          {errors.email ? (
+            <p className="text-sm text-destructive">{errors.email.message}</p>
+          ) : null}
         </label>
 
         <label className="block space-y-2">
           <span className="text-sm font-medium">Password</span>
           <input
             type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            {...register("password", {
+              required: "Password is required.",
+              minLength: {
+                value: 8,
+                message: "Password must be at least 8 characters.",
+              },
+            })}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
             placeholder="At least 8 characters"
-            minLength={8}
-            required
             autoComplete="new-password"
           />
+          {errors.password ? (
+            <p className="text-sm text-destructive">{errors.password.message}</p>
+          ) : null}
         </label>
 
         {error ? (

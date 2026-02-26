@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 
 type LoginResponse = {
@@ -11,18 +12,23 @@ type LoginResponse = {
   message?: string;
 };
 
+type LoginFormValues = {
+  email: string;
+  password: string;
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>();
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const onSubmit = async ({ email, password }: LoginFormValues) => {
     setError(null);
-    setIsSubmitting(true);
 
     try {
       const response = await fetch("/api/auth/login", {
@@ -44,8 +50,6 @@ export default function LoginPage() {
       router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -56,31 +60,37 @@ export default function LoginPage() {
         Access your account details and order history.
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-4">
         <label className="block space-y-2">
           <span className="text-sm font-medium">Email</span>
           <input
             type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            {...register("email", {
+              required: "Email is required.",
+            })}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
             placeholder="you@example.com"
-            required
             autoComplete="email"
           />
+          {errors.email ? (
+            <p className="text-sm text-destructive">{errors.email.message}</p>
+          ) : null}
         </label>
 
         <label className="block space-y-2">
           <span className="text-sm font-medium">Password</span>
           <input
             type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            {...register("password", {
+              required: "Password is required.",
+            })}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
             placeholder="Your password"
-            required
             autoComplete="current-password"
           />
+          {errors.password ? (
+            <p className="text-sm text-destructive">{errors.password.message}</p>
+          ) : null}
         </label>
 
         {error ? (

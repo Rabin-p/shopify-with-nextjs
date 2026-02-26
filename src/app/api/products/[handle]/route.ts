@@ -12,7 +12,7 @@ const PRODUCT_BY_HANDLE_QUERY = `
       featuredImage {
         url
       }
-      variants(first: 1) {
+      variants(first: 50) {
         edges {
           node {
             id

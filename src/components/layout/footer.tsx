@@ -10,9 +10,9 @@ const FOOTER_LINKS = [
 export function Footer() {
   return (
     <footer className="border-t bg-muted/30">
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-10 sm:px-6 md:grid-cols-2 md:items-end">
+      <div className="container mx-auto grid w-full gap-6 px-4 py-10 sm:px-6 md:grid-cols-2 md:items-end">
         <div className="space-y-2">
-          <p className="text-lg font-semibold">Loom & Lane</p>
+          <p className="text-lg font-semibold">Test Test</p>
           <p className="max-w-md text-sm text-muted-foreground">
             Everyday home pieces made with natural textures and clean lines.
           </p>

@@ -104,7 +104,6 @@ export async function shopifyCheckoutFetch<T>({
     }
 
     // The Shopify client returns data wrapped in a 'data' property
-    // We need to unwrap it to return the expected type T
     const unwrappedResponse = (response as { data?: T }).data;
     
     if (!unwrappedResponse) {

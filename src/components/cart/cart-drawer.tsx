@@ -26,7 +26,7 @@ export function CartDrawer() {
       // Redirect to Shopify checkout
       window.location.href = result.checkoutUrl;
     } else {
-      // Show error (you could add a toast notification here)
+      // Show error 
       console.error('Checkout failed:', result.error);
       alert(result.error || 'Checkout failed. Please try again.');
     }
@@ -60,7 +60,7 @@ export function CartDrawer() {
               <div className="flex items-center justify-between border-b p-6">
                 <div className="flex items-center gap-2">
                   <ShoppingBag className="h-5 w-5" />
-                  <h2 className="text-lg font-semibold">Shopping Cart ({cart.itemCount})</h2>
+                  <h2 className="text-lg font-semibold"> Cart ({cart.itemCount})</h2>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
@@ -117,7 +117,10 @@ export function CartDrawer() {
                           </div>
 
                           <div className="flex-1 min-w-0">
-                            <h3 className="truncate text-sm font-medium">{item.title}</h3>
+                            <h3 className="line-clamp-1 text-sm font-medium">{item.title}</h3>
+                            {item.variantTitle && (
+                              <p className="text-xs text-muted-foreground">{item.variantTitle}</p>
+                            )}
                             <p className="text-sm text-muted-foreground">
                               {formatPrice(item.price.amount, item.price.currencyCode)}
                             </p>

@@ -2,7 +2,8 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo } from 'react';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,9 @@ type ProductDetailsResponse = {
   product?: ProductNode;
   message?: string;
 };
+
+const getVariantUrlToken = (variantId: string) =>
+  variantId.split('/').pop() || variantId;
 
 const fetchProductByHandle = async (handle: string): Promise<ProductDetailsResponse> => {
   const res = await fetch(`/api/products/${encodeURIComponent(handle)}`);
@@ -28,6 +32,9 @@ const fetchProductByHandle = async (handle: string): Promise<ProductDetailsRespo
 
 export default function ProductDetailsPage() {
   const params = useParams<{ handle: string }>();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const handle = params?.handle || '';
   const { addToCart } = useCartStore();
 
@@ -38,19 +45,53 @@ export default function ProductDetailsPage() {
   });
 
   const product = data?.product;
+  const variants = useMemo(
+    () => product?.variants?.edges.map((edge) => edge.node) || [],
+    [product]
+  );
+  const variantFromUrl = searchParams.get('variant') || '';
+  const selectedVariant = variants.find(
+    (variant) =>
+      variant.id === variantFromUrl ||
+      getVariantUrlToken(variant.id) === variantFromUrl
+  ) || variants[0];
+  const selectedPrice = selectedVariant?.priceV2 || product?.priceRange.minVariantPrice;
+
+  const updateVariantInUrl = useCallback((variantId: string) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('variant', getVariantUrlToken(variantId));
+    router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  useEffect(() => {
+    if (!product || variants.length === 0) return;
+    if (
+      variantFromUrl &&
+      variants.some(
+        (variant) =>
+          variant.id === variantFromUrl ||
+          getVariantUrlToken(variant.id) === variantFromUrl
+      )
+    ) {
+      return;
+    }
+    updateVariantInUrl(variants[0].id);
+  }, [product, variantFromUrl, variants, updateVariantInUrl]);
 
   const handleAddToCart = () => {
     if (!product) return;
-
-    const variantId = product.variants?.edges[0]?.node.id;
+    const variantId = selectedVariant?.id || product.variants?.edges[0]?.node.id;
+    const variantTitle = selectedVariant?.title && selectedVariant.title !== 'Default Title' ? selectedVariant.title : undefined;
+    const price = selectedVariant?.priceV2 || product.priceRange.minVariantPrice;
 
     addToCart({
       id: variantId || product.id,
       title: product.title,
+      variantTitle,
       handle: product.handle,
       price: {
-        amount: product.priceRange.minVariantPrice.amount,
-        currencyCode: product.priceRange.minVariantPrice.currencyCode,
+        amount: price.amount,
+        currencyCode: price.currencyCode,
       },
       featuredImage: product.featuredImage,
       variantId: variantId,
@@ -104,15 +145,34 @@ export default function ProductDetailsPage() {
               src={product.featuredImage?.url || '/placeholder.png'}
               alt={product.title}
               fill
-              className="object-cover"
+              className="object-contain"
             />
           </div>
 
           <div className="space-y-4">
             <h1 className="text-3xl font-bold">{product.title}</h1>
             <Badge className="text-sm px-3 py-1">
-              {product.priceRange.minVariantPrice.currencyCode} {product.priceRange.minVariantPrice.amount}
+              {selectedPrice?.currencyCode} {selectedPrice?.amount}
             </Badge>
+            {variants.length > 1 && (
+              <div className="space-y-2">
+                <label htmlFor="variant-select" className="text-sm font-medium">
+                  Variant
+                </label>
+                <select
+                  id="variant-select"
+                  value={selectedVariant ? getVariantUrlToken(selectedVariant.id) : ''}
+                  onChange={(e) => updateVariantInUrl(e.target.value)}
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                >
+                  {variants.map((variant) => (
+                    <option key={variant.id} value={getVariantUrlToken(variant.id)}>
+                      {variant.title} - {variant.priceV2.currencyCode} {variant.priceV2.amount}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <p className="text-muted-foreground leading-relaxed">{product.description}</p>
             <Button
               onClick={handleAddToCart}

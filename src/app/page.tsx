@@ -26,7 +26,7 @@ const HIGHLIGHTS = [
 
 export default function Home() {
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-16 px-4 py-10 sm:px-6">
+    <div className="container mx-auto flex w-full flex-col gap-16 px-4 py-10 sm:px-6">
       <section className="overflow-hidden rounded-3xl border bg-linear-to-br from-secondary to-background p-8 sm:p-12">
         <div className="max-w-2xl space-y-6">
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-muted-foreground">

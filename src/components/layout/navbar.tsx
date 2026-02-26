@@ -289,9 +289,9 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
-      <nav className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
+      <nav className="container mx-auto flex h-16 w-full items-center justify-between px-4 sm:px-6">
         <Link href="/" className="text-lg font-semibold tracking-tight">
-          Loom & Lane
+         Test Test
         </Link>
 
         <NavLinks />
