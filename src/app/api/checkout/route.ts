@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
-import { shopifyCheckoutFetch } from "@/lib/shopify";
-import { CartItem } from "@/types/cartTypes";
+import { NextResponse } from 'next/server';
+import { shopifyCheckoutFetch } from '@/lib/shopify';
+import { CartItem } from '@/types/cartTypes';
 
 interface CartCreateResponse {
   cartCreate: {
@@ -118,21 +118,26 @@ export async function POST(req: Request) {
 
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
-        { success: false, message: "Cart is empty" },
+        { success: false, message: 'Cart is empty' },
         { status: 400 }
       );
     }
 
     const normalizedItems = items as CartItem[];
     const invalidItem = normalizedItems.find(
-      (item) => !item || !item.quantity || item.quantity < 1 || (!item.variantId && !item.id?.includes("ProductVariant/"))
+      (item) =>
+        !item ||
+        !item.quantity ||
+        item.quantity < 1 ||
+        (!item.variantId && !item.id?.includes('ProductVariant/'))
     );
 
     if (invalidItem) {
       return NextResponse.json(
         {
           success: false,
-          message: "Cart contains an invalid item. Please remove it and add the product again.",
+          message:
+            'Cart contains an invalid item. Please remove it and add the product again.',
         },
         { status: 400 }
       );
@@ -155,11 +160,11 @@ export async function POST(req: Request) {
 
     // Check for GraphQL errors in the response
     if (data.errors && data.errors.length > 0) {
-      console.error("GraphQL errors:", data.errors);
+      console.error('GraphQL errors:', data.errors);
       return NextResponse.json(
-        { 
-          success: false, 
-          message: `GraphQL Error: ${data.errors[0].message}` 
+        {
+          success: false,
+          message: `GraphQL Error: ${data.errors[0].message}`,
         },
         { status: 400 }
       );
@@ -168,20 +173,23 @@ export async function POST(req: Request) {
     const { cart, userErrors } = data.cartCreate;
 
     if (userErrors && userErrors.length > 0) {
-      console.error("Cart errors:", userErrors);
+      console.error('Cart errors:', userErrors);
       return NextResponse.json(
-        { 
-          success: false, 
-          message: userErrors[0].message 
+        {
+          success: false,
+          message: userErrors[0].message,
         },
         { status: 400 }
       );
     }
 
     if (!cart) {
-      console.error("Cart is null - cartCreate response:", data.cartCreate);
+      console.error('Cart is null - cartCreate response:', data.cartCreate);
       return NextResponse.json(
-        { success: false, message: "Failed to create cart - no cart returned from Shopify" },
+        {
+          success: false,
+          message: 'Failed to create cart - no cart returned from Shopify',
+        },
         { status: 500 }
       );
     }
@@ -198,14 +206,11 @@ export async function POST(req: Request) {
       },
     });
   } catch (error) {
-    console.error("Checkout API Error:", error);
+    console.error('Checkout API Error:', error);
     const message =
       error instanceof Error && error.message
         ? error.message
-        : "Failed to process checkout";
-    return NextResponse.json(
-      { success: false, message },
-      { status: 500 }
-    );
+        : 'Failed to process checkout';
+    return NextResponse.json({ success: false, message }, { status: 500 });
   }
 }

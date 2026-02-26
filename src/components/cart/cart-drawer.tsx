@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { X, Plus, Minus, Trash2, ShoppingBag, Loader2 } from 'lucide-react';
 import { useCartStore } from '@/lib/cartStore';
+import { isAnimatedImage } from '@/lib/isAnimatedImage';
 
 export function CartDrawer() {
   const { cart, removeFromCart, updateQuantity, clearCart, isOpen, closeCart, checkout } = useCartStore();
@@ -111,6 +112,7 @@ export function CartDrawer() {
                                 alt={item.title}
                                 width={64}
                                 height={64}
+                                unoptimized={isAnimatedImage(item.featuredImage.url)}
                                 className="h-full w-full object-cover"
                               />
                             )}

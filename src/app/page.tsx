@@ -43,9 +43,6 @@ export default function Home() {
             <Button asChild size="lg">
               <Link href="/products/all">Shop all products</Link>
             </Button>
-            <Button asChild variant="outline" size="lg">
-              <Link href="/products/all">Browse best sellers</Link>
-            </Button>
           </div>
         </div>
       </section>

@@ -1,4 +1,4 @@
-import type { ProductNode } from "@/types/productTypes";
+import type { ProductNode } from '@/types/productTypes';
 
 export type ProductFilterValue = {
   id: string;

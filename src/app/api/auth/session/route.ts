@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import {
   canUseAdminCustomerTagVerification,
   CUSTOMER_ORIGIN_COOKIE,
   CUSTOMER_TOKEN_COOKIE,
   getCustomerByAccessToken,
   isSiteCustomer,
-} from "@/lib/customerAuth";
+} from '@/lib/customerAuth';
 
 export async function GET() {
   const cookieStore = await cookies();

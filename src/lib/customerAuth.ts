@@ -1,8 +1,8 @@
-import { shopifyCheckoutFetch } from "@/lib/shopify";
+import { shopifyCheckoutFetch } from '@/lib/shopify';
 
-export const CUSTOMER_TOKEN_COOKIE = "shopify_customer_token";
-export const CUSTOMER_ORIGIN_COOKIE = "shopify_customer_origin";
-const SITE_CUSTOMER_TAG = "headless-site";
+export const CUSTOMER_TOKEN_COOKIE = 'shopify_customer_token';
+export const CUSTOMER_ORIGIN_COOKIE = 'shopify_customer_origin';
+const SITE_CUSTOMER_TAG = 'headless-site';
 
 type CustomerUserError = {
   code: string | null;
@@ -129,7 +129,7 @@ type AdminCustomerTagsResponse = {
 
 const adminStoreDomain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN;
 const adminAccessToken = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
-const adminApiVersion = process.env.SHOPIFY_ADMIN_API_VERSION || "2025-04";
+const adminApiVersion = process.env.SHOPIFY_ADMIN_API_VERSION || '2025-04';
 
 export async function createCustomerAccessToken(input: {
   email: string;
@@ -178,32 +178,32 @@ async function adminGraphqlFetch<T>({
   variables?: Record<string, unknown>;
 }) {
   if (!adminStoreDomain || !adminAccessToken) {
-    throw new Error("Missing admin API configuration.");
+    throw new Error('Missing admin API configuration.');
   }
 
   const response = await fetch(
     `https://${adminStoreDomain}/admin/api/${adminApiVersion}/graphql.json`,
     {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
-        "X-Shopify-Access-Token": adminAccessToken,
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': adminAccessToken,
       },
       body: JSON.stringify({ query, variables }),
     }
   );
 
   if (!response.ok) {
-    throw new Error("Admin API request failed.");
+    throw new Error('Admin API request failed.');
   }
 
   const json = (await response.json()) as AdminGraphQLResponse<T>;
   if (json.errors?.length) {
-    throw new Error(json.errors[0]?.message || "Admin API GraphQL error.");
+    throw new Error(json.errors[0]?.message || 'Admin API GraphQL error.');
   }
 
   if (!json.data) {
-    throw new Error("Admin API returned no data.");
+    throw new Error('Admin API returned no data.');
   }
 
   return json.data;
@@ -218,7 +218,9 @@ export async function addSiteCustomerTag(customerId: string) {
   });
 
   if (data.tagsAdd.userErrors.length) {
-    throw new Error(data.tagsAdd.userErrors[0]?.message || "Failed to tag customer.");
+    throw new Error(
+      data.tagsAdd.userErrors[0]?.message || 'Failed to tag customer.'
+    );
   }
 }
 

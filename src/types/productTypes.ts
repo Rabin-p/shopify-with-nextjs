@@ -3,6 +3,7 @@ export interface ProductNode {
   title: string;
   handle: string;
   description: string;
+  availableForSale: boolean;
   featuredImage?: {
     url: string;
   };
@@ -11,6 +12,7 @@ export interface ProductNode {
       node: {
         id: string;
         title: string;
+        availableForSale: boolean;
         priceV2: {
           amount: string;
           currencyCode: string;
@@ -24,4 +26,4 @@ export interface ProductNode {
       currencyCode: string;
     };
   };
-};
+}

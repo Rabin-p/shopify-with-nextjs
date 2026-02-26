@@ -13,11 +13,16 @@ interface CartStore {
   clearCart: () => void;
   toggleCart: () => void;
   closeCart: () => void;
-  checkout: () => Promise<{ success: boolean; checkoutUrl?: string; error?: string }>;
+  checkout: () => Promise<{
+    success: boolean;
+    checkoutUrl?: string;
+    error?: string;
+  }>;
 }
 
 const isValidCheckoutItem = (item: CartItem) =>
-  item.quantity > 0 && Boolean(item.variantId || item.id.includes('ProductVariant/'));
+  item.quantity > 0 &&
+  Boolean(item.variantId || item.id.includes('ProductVariant/'));
 
 const normalizeCartItem = (item: CartItem): CartItem => ({
   ...item,
@@ -50,7 +55,10 @@ export const useCartStore = create<CartStore>()(
 
       addToCart: (newItem) => {
         set((state) => {
-          const normalizedNewItem = normalizeCartItem({ ...newItem, quantity: 1 });
+          const normalizedNewItem = normalizeCartItem({
+            ...newItem,
+            quantity: 1,
+          });
           const existingItemIndex = state.cart.items.findIndex(
             (item) => item.id === normalizedNewItem.id
           );
@@ -78,7 +86,9 @@ export const useCartStore = create<CartStore>()(
 
       removeFromCart: (id) => {
         set((state) => {
-          const updatedItems = state.cart.items.filter((item) => item.id !== id);
+          const updatedItems = state.cart.items.filter(
+            (item) => item.id !== id
+          );
 
           return {
             cart: buildCart(updatedItems),
@@ -125,21 +135,25 @@ export const useCartStore = create<CartStore>()(
         const { cart } = get();
 
         if (cart.items.length === 0) {
-          return { success: false, error: "Cart is empty" };
+          return { success: false, error: 'Cart is empty' };
         }
 
         const normalizedItems = cart.items.map(normalizeCartItem);
         const validItems = normalizedItems.filter(isValidCheckoutItem);
 
         // Heal old persisted carts that were stored with non-variant IDs.
-        if (validItems.length !== cart.items.length || normalizedItems.some((item, idx) => item.id !== cart.items[idx]?.id)) {
+        if (
+          validItems.length !== cart.items.length ||
+          normalizedItems.some((item, idx) => item.id !== cart.items[idx]?.id)
+        ) {
           set({ cart: buildCart(validItems) });
         }
 
         if (validItems.length === 0) {
           return {
             success: false,
-            error: "Your cart had outdated items and was refreshed. Please add products again.",
+            error:
+              'Your cart had outdated items and was refreshed. Please add products again.',
           };
         }
 
@@ -160,11 +174,14 @@ export const useCartStore = create<CartStore>()(
             get().closeCart();
             return { success: true, checkoutUrl: data.checkoutUrl };
           } else {
-            return { success: false, error: data.message || "Checkout failed" };
+            return { success: false, error: data.message || 'Checkout failed' };
           }
         } catch (error) {
           console.error('Checkout error:', error);
-          const message = error instanceof Error ? error.message : "Failed to process checkout";
+          const message =
+            error instanceof Error
+              ? error.message
+              : 'Failed to process checkout';
           return { success: false, error: message };
         }
       },
@@ -174,8 +191,12 @@ export const useCartStore = create<CartStore>()(
       version: 2,
       migrate: (persistedState) => {
         const state = persistedState as Partial<CartStore>;
-        const persistedItems = Array.isArray(state?.cart?.items) ? state.cart.items : [];
-        const migratedItems = persistedItems.map(normalizeCartItem).filter(isValidCheckoutItem);
+        const persistedItems = Array.isArray(state?.cart?.items)
+          ? state.cart.items
+          : [];
+        const migratedItems = persistedItems
+          .map(normalizeCartItem)
+          .filter(isValidCheckoutItem);
 
         return {
           ...state,

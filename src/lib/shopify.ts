@@ -1,31 +1,31 @@
-import { createStorefrontApiClient } from "@shopify/storefront-api-client";
+import { createStorefrontApiClient } from '@shopify/storefront-api-client';
 
 const storeDomain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN;
-const publicAccessToken = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_ACCESS_TOKEN;
-const privateAccessToken = process.env.NEXT_PRIVATE_SHOPIFY_STOREFRONT_ACCESS_TOKEN;
+const publicAccessToken =
+  process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_ACCESS_TOKEN;
+const privateAccessToken =
+  process.env.NEXT_PRIVATE_SHOPIFY_STOREFRONT_ACCESS_TOKEN;
 
 if (!storeDomain) {
-  throw new Error("Missing NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN");
+  throw new Error('Missing NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN');
 }
 
 if (!publicAccessToken) {
-  throw new Error("Missing NEXT_PUBLIC_SHOPIFY_STOREFRONT_ACCESS_TOKEN");
+  throw new Error('Missing NEXT_PUBLIC_SHOPIFY_STOREFRONT_ACCESS_TOKEN');
 }
 
-// Public client for reading products 
+// Public client for reading products
 export const publicShopifyClient = createStorefrontApiClient({
   storeDomain,
-  apiVersion: "2026-01",
+  apiVersion: '2026-01',
   publicAccessToken,
 });
 
-// Private client for cart operations 
+// Private client for cart operations
 export const privateShopifyClient = createStorefrontApiClient({
   storeDomain,
-  apiVersion: "2026-01",
-  ...(privateAccessToken
-    ? { privateAccessToken }
-    : { publicAccessToken }),
+  apiVersion: '2026-01',
+  ...(privateAccessToken ? { privateAccessToken } : { publicAccessToken }),
 });
 
 // Default client for general use (uses public token)
@@ -54,8 +54,10 @@ export async function shopifyFetch<T>({
       variables,
     });
 
-    if (response && typeof response === "object" && "errors" in response) {
-      const errorValue = (response as { errors?: GraphQLError[] | { message?: string } }).errors;
+    if (response && typeof response === 'object' && 'errors' in response) {
+      const errorValue = (
+        response as { errors?: GraphQLError[] | { message?: string } }
+      ).errors;
       const errorMessage = Array.isArray(errorValue)
         ? errorValue[0]?.message
         : errorValue?.message;
@@ -66,15 +68,15 @@ export async function shopifyFetch<T>({
 
     //Shopify client returns data wrapped in a 'data' property
     const unwrappedResponse = (response as { data?: T }).data;
-    
+
     if (!unwrappedResponse) {
-      throw new Error("No data returned from Shopify API");
+      throw new Error('No data returned from Shopify API');
     }
 
     // Return the unwrapped response as the expected type T
     return unwrappedResponse as T;
   } catch (error) {
-    console.error("Shopify fetch error:", error);
+    console.error('Shopify fetch error:', error);
     throw error;
   }
 }
@@ -93,8 +95,10 @@ export async function shopifyCheckoutFetch<T>({
       variables,
     });
 
-    if (response && typeof response === "object" && "errors" in response) {
-      const errorValue = (response as { errors?: GraphQLError[] | { message?: string } }).errors;
+    if (response && typeof response === 'object' && 'errors' in response) {
+      const errorValue = (
+        response as { errors?: GraphQLError[] | { message?: string } }
+      ).errors;
       const errorMessage = Array.isArray(errorValue)
         ? errorValue[0]?.message
         : errorValue?.message;
@@ -105,15 +109,15 @@ export async function shopifyCheckoutFetch<T>({
 
     // The Shopify client returns data wrapped in a 'data' property
     const unwrappedResponse = (response as { data?: T }).data;
-    
+
     if (!unwrappedResponse) {
-      throw new Error("No data returned from Shopify Checkout API");
+      throw new Error('No data returned from Shopify Checkout API');
     }
 
     // Return the unwrapped response as the expected type T
     return unwrappedResponse as T;
   } catch (error) {
-    console.error("Shopify checkout fetch error:", error);
+    console.error('Shopify checkout fetch error:', error);
     throw error;
   }
 }

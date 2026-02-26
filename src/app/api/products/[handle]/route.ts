@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
-import { shopifyFetch } from "@/lib/shopify";
-import { ProductNode } from "@/types/productTypes";
+import { NextResponse } from 'next/server';
+import { shopifyFetch } from '@/lib/shopify';
+import { ProductNode } from '@/types/productTypes';
 
 const PRODUCT_BY_HANDLE_QUERY = `
   query GetProductByHandle($handle: String!) {
@@ -9,6 +9,7 @@ const PRODUCT_BY_HANDLE_QUERY = `
       title
       handle
       description
+      availableForSale
       featuredImage {
         url
       }
@@ -17,6 +18,7 @@ const PRODUCT_BY_HANDLE_QUERY = `
           node {
             id
             title
+            availableForSale
             priceV2 {
               amount
               currencyCode
@@ -40,11 +42,11 @@ export async function GET(
 ) {
   try {
     const { handle: rawHandle } = await params;
-    const handle = decodeURIComponent(rawHandle || "").trim();
+    const handle = decodeURIComponent(rawHandle || '').trim();
 
     if (!handle) {
       return NextResponse.json(
-        { success: false, message: "Product handle is required" },
+        { success: false, message: 'Product handle is required' },
         { status: 400 }
       );
     }
@@ -56,7 +58,7 @@ export async function GET(
 
     if (!data.product) {
       return NextResponse.json(
-        { success: false, message: "Product not found" },
+        { success: false, message: 'Product not found' },
         { status: 404 }
       );
     }
@@ -66,9 +68,9 @@ export async function GET(
       product: data.product,
     });
   } catch (error) {
-    console.error("Product details route error:", error);
+    console.error('Product details route error:', error);
     return NextResponse.json(
-      { success: false, message: "Failed to fetch product details" },
+      { success: false, message: 'Failed to fetch product details' },
       { status: 500 }
     );
   }

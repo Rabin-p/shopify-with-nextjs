@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
-import { shopifyFetch } from "@/lib/shopify";
+import { shopifyFetch } from '@/lib/shopify';
 
 interface PredictiveProduct {
   id: string;
@@ -54,7 +54,7 @@ const PREDICTIVE_SEARCH_QUERY = `
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const query = url.searchParams.get("q")?.trim() ?? "";
+    const query = url.searchParams.get('q')?.trim() ?? '';
 
     if (query.length < 2) {
       return NextResponse.json({ success: true, products: [] });
@@ -73,11 +73,11 @@ export async function GET(req: Request) {
       products: data.predictiveSearch.products,
     });
   } catch (error) {
-    console.error("Predictive search API error:", error);
+    console.error('Predictive search API error:', error);
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to fetch predictive search results",
+        message: 'Failed to fetch predictive search results',
       },
       { status: 500 }
     );

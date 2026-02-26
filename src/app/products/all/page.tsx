@@ -30,6 +30,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { isAnimatedImage } from '@/lib/isAnimatedImage';
 
 const SORT_OPTIONS = [
   { value: "FEATURED", label: "Featured", sortKey: "COLLECTION_DEFAULT", reverse: false },
@@ -187,11 +188,17 @@ export default function AllProductsPage() {
   const getSelectedVariant = (product: ProductNode) => {
     const variants = product.variants?.edges.map((edge) => edge.node) || [];
     const selectedVariantId = selectedVariants[product.id];
-    return variants.find((variant) => variant.id === selectedVariantId) || variants[0];
+    return (
+      variants.find((variant) => variant.id === selectedVariantId) ||
+      variants.find((variant) => variant.availableForSale) ||
+      variants[0]
+    );
   };
 
   const handleAddToCart = (product: ProductNode) => {
     const selectedVariant = getSelectedVariant(product);
+    const isSelectedVariantAvailable = Boolean(selectedVariant?.availableForSale);
+    if (!isSelectedVariantAvailable) return;
     const variantId = selectedVariant?.id || product.variants?.edges[0]?.node.id;
     const variantTitle = selectedVariant?.title && selectedVariant.title !== 'Default Title' ? selectedVariant.title : undefined;
     const price = selectedVariant?.priceV2 || product.priceRange.minVariantPrice;
@@ -398,6 +405,7 @@ export default function AllProductsPage() {
             products.map(product => {
               const variants = product.variants?.edges.map((edge) => edge.node) || [];
               const selectedVariant = getSelectedVariant(product);
+              const isSelectedVariantAvailable = Boolean(selectedVariant?.availableForSale);
               const selectedPrice = selectedVariant?.priceV2 || product.priceRange.minVariantPrice;
               const productHref = selectedVariant
                 ? `/products/${product.handle}?variant=${encodeURIComponent(getVariantUrlToken(selectedVariant.id))}`
@@ -411,6 +419,7 @@ export default function AllProductsPage() {
                       src={product.featuredImage?.url || '/placeholder.png'}
                       alt={product.title}
                       fill
+                      unoptimized={isAnimatedImage(product.featuredImage?.url)}
                       className="object-contain"
                     />
                   </div>
@@ -444,9 +453,10 @@ export default function AllProductsPage() {
                       e.stopPropagation();
                       handleAddToCart(product);
                     }}
+                    disabled={!isSelectedVariantAvailable}
                     className='cursor-pointer'
                   >
-                    Add to Cart
+                    {isSelectedVariantAvailable ? 'Add to Cart' : 'Out of stock'}
                   </Button>
                   </div>
                 </CardFooter>

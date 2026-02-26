@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 import {
   addSiteCustomerTag,
   createCustomer,
   createCustomerAccessToken,
   CUSTOMER_ORIGIN_COOKIE,
   CUSTOMER_TOKEN_COOKIE,
-} from "@/lib/customerAuth";
+} from '@/lib/customerAuth';
 
 type RegisterRequest = {
   email?: string;
@@ -17,21 +17,21 @@ type RegisterRequest = {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as RegisterRequest;
-    const email = body.email?.trim() ?? "";
-    const password = body.password ?? "";
+    const email = body.email?.trim() ?? '';
+    const password = body.password ?? '';
     const firstName = body.firstName?.trim() || undefined;
     const lastName = body.lastName?.trim() || undefined;
 
     if (!email || !password) {
       return NextResponse.json(
-        { success: false, message: "Email and password are required." },
+        { success: false, message: 'Email and password are required.' },
         { status: 400 }
       );
     }
 
     if (password.length < 8) {
       return NextResponse.json(
-        { success: false, message: "Password must be at least 8 characters." },
+        { success: false, message: 'Password must be at least 8 characters.' },
         { status: 400 }
       );
     }
@@ -47,7 +47,8 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          message: customerUserErrors[0]?.message ?? "Unable to create customer.",
+          message:
+            customerUserErrors[0]?.message ?? 'Unable to create customer.',
         },
         { status: 400 }
       );
@@ -62,33 +63,38 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          message: tokenErrors[0]?.message ?? "Account created but sign-in failed.",
+          message:
+            tokenErrors[0]?.message ?? 'Account created but sign-in failed.',
         },
         { status: 500 }
       );
     }
 
     const response = NextResponse.json({ success: true });
-    response.cookies.set(CUSTOMER_TOKEN_COOKIE, customerAccessToken.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      expires: new Date(customerAccessToken.expiresAt),
-    });
+    response.cookies.set(
+      CUSTOMER_TOKEN_COOKIE,
+      customerAccessToken.accessToken,
+      {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        expires: new Date(customerAccessToken.expiresAt),
+      }
+    );
     response.cookies.set(CUSTOMER_ORIGIN_COOKIE, customer.id, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
       expires: new Date(customerAccessToken.expiresAt),
     });
 
     return response;
   } catch (error) {
-    console.error("Customer registration failed:", error);
+    console.error('Customer registration failed:', error);
     return NextResponse.json(
-      { success: false, message: "Failed to register customer." },
+      { success: false, message: 'Failed to register customer.' },
       { status: 500 }
     );
   }
