@@ -94,7 +94,6 @@ function NavbarActions({ signInUrl }: { signInUrl: string }) {
     toggleCart,
     hydratePersistentCart,
     disablePersistentCart,
-    clearCart,
   } = useCartStore();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -116,7 +115,6 @@ function NavbarActions({ signInUrl }: { signInUrl: string }) {
     try {
       setIsLoggingOut(true);
       await fetch('/api/auth/logout', { method: 'POST' });
-      clearCart({ skipSync: true });
       disablePersistentCart();
       queryClient.setQueryData(['customer-session'], { authenticated: false });
       await queryClient.invalidateQueries({ queryKey: ['customer-session'] });
