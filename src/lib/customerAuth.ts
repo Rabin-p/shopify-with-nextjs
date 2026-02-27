@@ -109,6 +109,33 @@ const ADMIN_CUSTOMER_TAGS_QUERY = `
   }
 `;
 
+const CUSTOMER_CART_METAFIELD_NAMESPACE = 'headless';
+const CUSTOMER_CART_METAFIELD_KEY = 'active_cart_id';
+
+const ADMIN_CUSTOMER_CART_METAFIELD_QUERY = `
+  query customerCartMetafield($id: ID!, $namespace: String!, $key: String!) {
+    customer(id: $id) {
+      id
+      metafield(namespace: $namespace, key: $key) {
+        value
+      }
+    }
+  }
+`;
+
+const ADMIN_CUSTOMER_CART_METAFIELD_SET_MUTATION = `
+  mutation customerCartMetafieldSet($input: CustomerInput!) {
+    customerUpdate(input: $input) {
+      customer {
+        id
+      }
+      userErrors {
+        message
+      }
+    }
+  }
+`;
+
 type AdminGraphQLResponse<T> = {
   data?: T;
   errors?: Array<{ message: string }>;
@@ -125,6 +152,24 @@ type AdminCustomerTagsResponse = {
     id: string;
     tags: string[];
   } | null;
+};
+
+type AdminCustomerCartMetafieldResponse = {
+  customer: {
+    id: string;
+    metafield: {
+      value: string;
+    } | null;
+  } | null;
+};
+
+type AdminCustomerUpdateResponse = {
+  customerUpdate: {
+    customer: {
+      id: string;
+    } | null;
+    userErrors: Array<{ message: string }>;
+  };
 };
 
 const adminStoreDomain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN;
@@ -233,4 +278,55 @@ export async function isSiteCustomer(customerId: string) {
   });
 
   return Boolean(data.customer?.tags.includes(SITE_CUSTOMER_TAG));
+}
+
+export function canUseAdminCustomerCartPersistence() {
+  return canUseAdminCustomerTagVerification();
+}
+
+export async function getStoredCustomerCartId(customerId: string) {
+  if (!canUseAdminCustomerCartPersistence()) return null;
+
+  const data = await adminGraphqlFetch<AdminCustomerCartMetafieldResponse>({
+    query: ADMIN_CUSTOMER_CART_METAFIELD_QUERY,
+    variables: {
+      id: customerId,
+      namespace: CUSTOMER_CART_METAFIELD_NAMESPACE,
+      key: CUSTOMER_CART_METAFIELD_KEY,
+    },
+  });
+
+  const value = data.customer?.metafield?.value?.trim();
+  return value || null;
+}
+
+export async function setStoredCustomerCartId(
+  customerId: string,
+  cartId: string
+) {
+  if (!canUseAdminCustomerCartPersistence()) return;
+
+  const data = await adminGraphqlFetch<AdminCustomerUpdateResponse>({
+    query: ADMIN_CUSTOMER_CART_METAFIELD_SET_MUTATION,
+    variables: {
+      input: {
+        id: customerId,
+        metafields: [
+          {
+            namespace: CUSTOMER_CART_METAFIELD_NAMESPACE,
+            key: CUSTOMER_CART_METAFIELD_KEY,
+            type: 'single_line_text_field',
+            value: cartId,
+          },
+        ],
+      },
+    },
+  });
+
+  if (data.customerUpdate.userErrors.length > 0) {
+    throw new Error(
+      data.customerUpdate.userErrors[0]?.message ||
+        'Failed to persist customer cart ID.'
+    );
+  }
 }

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { shopifyCheckoutFetch } from '@/lib/shopify';
+import { CUSTOMER_TOKEN_COOKIE } from '@/lib/customerAuth';
+import { SHOPIFY_CART_COOKIE } from '@/lib/cartSession';
 import { CartItem } from '@/types/cartTypes';
 
 interface CartCreateResponse {
@@ -113,6 +116,8 @@ const CART_CREATE_MUTATION = `
 
 export async function POST(req: Request) {
   try {
+    const cookieStore = await cookies();
+    const customerAccessToken = cookieStore.get(CUSTOMER_TOKEN_COOKIE)?.value;
     const body = await req.json();
     const { items } = body;
 
@@ -154,6 +159,13 @@ export async function POST(req: Request) {
       variables: {
         input: {
           lines,
+          ...(customerAccessToken
+            ? {
+                buyerIdentity: {
+                  customerAccessToken,
+                },
+              }
+            : {}),
         },
       },
     });
@@ -194,7 +206,7 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       checkoutUrl: cart.checkoutUrl,
       checkout: {
@@ -205,6 +217,14 @@ export async function POST(req: Request) {
         lineItems: cart.lines.edges.map((edge) => edge.node),
       },
     });
+    response.cookies.set(SHOPIFY_CART_COOKIE, cart.id, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30,
+    });
+    return response;
   } catch (error) {
     console.error('Checkout API Error:', error);
     const message =

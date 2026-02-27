@@ -7,12 +7,17 @@ import { CartItem, Cart } from '@/types/cartTypes';
 interface CartStore {
   cart: Cart;
   isOpen: boolean;
+  isSyncingPersistentCart: boolean;
+  hasPersistentCartSession: boolean;
   addToCart: (item: Omit<CartItem, 'quantity'>) => void;
   removeFromCart: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
-  clearCart: () => void;
+  clearCart: (options?: { skipSync?: boolean }) => void;
   toggleCart: () => void;
   closeCart: () => void;
+  hydratePersistentCart: () => Promise<void>;
+  syncPersistentCart: () => Promise<void>;
+  disablePersistentCart: () => void;
   checkout: () => Promise<{
     success: boolean;
     checkoutUrl?: string;
@@ -43,6 +48,59 @@ const buildCart = (items: CartItem[]): Cart => {
   };
 };
 
+const mergeCartItems = (serverItems: CartItem[], localItems: CartItem[]) => {
+  const merged = new Map<string, CartItem>();
+
+  for (const item of [...serverItems, ...localItems]) {
+    const normalized = normalizeCartItem(item);
+    const key = normalized.id;
+    const existing = merged.get(key);
+    if (existing) {
+      merged.set(key, {
+        ...existing,
+        quantity: existing.quantity + item.quantity,
+      });
+    } else {
+      merged.set(key, normalized);
+    }
+  }
+
+  return Array.from(merged.values()).filter(isValidCheckoutItem);
+};
+
+const areCartItemsEqual = (a: CartItem[], b: CartItem[]) => {
+  if (a.length !== b.length) return false;
+
+  const sortedA = [...a].sort((x, y) => x.id.localeCompare(y.id));
+  const sortedB = [...b].sort((x, y) => x.id.localeCompare(y.id));
+
+  for (let i = 0; i < sortedA.length; i += 1) {
+    const itemA = sortedA[i];
+    const itemB = sortedB[i];
+    if (!itemA || !itemB) return false;
+    if (itemA.id !== itemB.id || itemA.quantity !== itemB.quantity)
+      return false;
+  }
+
+  return true;
+};
+
+type ServerCartResponse = {
+  authenticated?: boolean;
+  success?: boolean;
+  cart?: Cart;
+};
+
+async function putPersistentCart(items: CartItem[]) {
+  return fetch('/api/cart', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ items }),
+  });
+}
+
 export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
@@ -52,6 +110,8 @@ export const useCartStore = create<CartStore>()(
         itemCount: 0,
       },
       isOpen: false,
+      isSyncingPersistentCart: false,
+      hasPersistentCartSession: false,
 
       addToCart: (newItem) => {
         set((state) => {
@@ -63,25 +123,21 @@ export const useCartStore = create<CartStore>()(
             (item) => item.id === normalizedNewItem.id
           );
 
-          let updatedItems: CartItem[];
-
-          if (existingItemIndex >= 0) {
-            // Item exists, update quantity
-            updatedItems = state.cart.items.map((item, index) =>
-              index === existingItemIndex
-                ? { ...item, quantity: item.quantity + 1 }
-                : item
-            );
-          } else {
-            // New item, add to cart
-            updatedItems = [...state.cart.items, normalizedNewItem];
-          }
+          const updatedItems =
+            existingItemIndex >= 0
+              ? state.cart.items.map((item, index) =>
+                  index === existingItemIndex
+                    ? { ...item, quantity: item.quantity + 1 }
+                    : item
+                )
+              : [...state.cart.items, normalizedNewItem];
 
           return {
             cart: buildCart(updatedItems),
-            isOpen: true, // Open drawer when item is added
+            isOpen: true,
           };
         });
+        void get().syncPersistentCart();
       },
 
       removeFromCart: (id) => {
@@ -94,6 +150,7 @@ export const useCartStore = create<CartStore>()(
             cart: buildCart(updatedItems),
           };
         });
+        void get().syncPersistentCart();
       },
 
       updateQuantity: (id, quantity) => {
@@ -111,9 +168,10 @@ export const useCartStore = create<CartStore>()(
             cart: buildCart(updatedItems),
           };
         });
+        void get().syncPersistentCart();
       },
 
-      clearCart: () => {
+      clearCart: (options) => {
         set({
           cart: {
             items: [],
@@ -121,6 +179,9 @@ export const useCartStore = create<CartStore>()(
             itemCount: 0,
           },
         });
+        if (!options?.skipSync) {
+          void get().syncPersistentCart();
+        }
       },
 
       toggleCart: () => {
@@ -129,6 +190,93 @@ export const useCartStore = create<CartStore>()(
 
       closeCart: () => {
         set({ isOpen: false });
+      },
+
+      hydratePersistentCart: async () => {
+        set({ isSyncingPersistentCart: true });
+        try {
+          const response = await fetch('/api/cart', {
+            cache: 'no-store',
+          });
+
+          if (!response.ok) {
+            set({ hasPersistentCartSession: false });
+            return;
+          }
+
+          const data = (await response.json()) as ServerCartResponse;
+          if (!data.authenticated || !data.cart) {
+            set({ hasPersistentCartSession: false });
+            return;
+          }
+
+          const localItems = get()
+            .cart.items.map(normalizeCartItem)
+            .filter(isValidCheckoutItem);
+          const serverItems = data.cart.items
+            .map(normalizeCartItem)
+            .filter(isValidCheckoutItem);
+
+          // If local persisted cart already mirrors the server cart, do not
+          // merge quantities again.
+          if (areCartItemsEqual(localItems, serverItems)) {
+            set({ cart: data.cart, hasPersistentCartSession: true });
+            return;
+          }
+
+          const mergedItems = mergeCartItems(serverItems, localItems);
+
+          if (!areCartItemsEqual(serverItems, mergedItems)) {
+            const syncResponse = await putPersistentCart(mergedItems);
+
+            if (syncResponse.ok) {
+              const syncData =
+                (await syncResponse.json()) as ServerCartResponse;
+              if (syncData.success && syncData.cart) {
+                set({ cart: syncData.cart, hasPersistentCartSession: true });
+              } else {
+                set({
+                  cart: buildCart(mergedItems),
+                  hasPersistentCartSession: true,
+                });
+              }
+            } else {
+              set({
+                cart: buildCart(mergedItems),
+                hasPersistentCartSession: true,
+              });
+            }
+          } else {
+            set({ cart: data.cart, hasPersistentCartSession: true });
+          }
+        } catch (error) {
+          console.error('Persistent cart hydration failed:', error);
+        } finally {
+          set({ isSyncingPersistentCart: false });
+        }
+      },
+
+      syncPersistentCart: async () => {
+        // Skip sync until we establish whether this user has an authenticated
+        // session and a server-side cart.
+        if (!get().hasPersistentCartSession) return;
+
+        const cartItems = get()
+          .cart.items.map(normalizeCartItem)
+          .filter(isValidCheckoutItem);
+
+        try {
+          await putPersistentCart(cartItems);
+        } catch (error) {
+          console.error('Persistent cart sync failed:', error);
+        }
+      },
+
+      disablePersistentCart: () => {
+        set({
+          hasPersistentCartSession: false,
+          isSyncingPersistentCart: false,
+        });
       },
 
       checkout: async () => {
@@ -170,7 +318,7 @@ export const useCartStore = create<CartStore>()(
 
           if (data.success) {
             // Clear cart and close drawer on successful checkout
-            get().clearCart();
+            get().clearCart({ skipSync: true });
             get().closeCart();
             return { success: true, checkoutUrl: data.checkoutUrl };
           } else {
