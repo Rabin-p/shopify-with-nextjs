@@ -6,7 +6,7 @@ import {
   getStoredCustomerCartId,
   setStoredCustomerCartId,
 } from '@/lib/customerAuth';
-import { SHOPIFY_CART_COOKIE } from '@/lib/cartSession';
+import { SHOPIFY_CART_COOKIE } from '@/lib/constants/cookies';
 
 const CART_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 

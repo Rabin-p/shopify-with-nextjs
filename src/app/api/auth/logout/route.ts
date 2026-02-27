@@ -3,7 +3,7 @@ import {
   CUSTOMER_ORIGIN_COOKIE,
   CUSTOMER_TOKEN_COOKIE,
 } from '@/lib/customerAuth';
-import { SHOPIFY_CART_COOKIE } from '@/lib/cartSession';
+import { SHOPIFY_CART_COOKIE } from '@/lib/constants/cookies';
 
 export async function POST() {
   const response = NextResponse.json({ success: true });

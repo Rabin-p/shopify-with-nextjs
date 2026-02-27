@@ -1,7 +1,8 @@
 import { shopifyCheckoutFetch } from '@/lib/shopify';
-
-export const CUSTOMER_TOKEN_COOKIE = 'shopify_customer_token';
-export const CUSTOMER_ORIGIN_COOKIE = 'shopify_customer_origin';
+export {
+  CUSTOMER_ORIGIN_COOKIE,
+  CUSTOMER_TOKEN_COOKIE,
+} from '@/lib/constants/cookies';
 
 export type ShopifyCustomer = {
   id: string;
