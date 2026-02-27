@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { shopifyCheckoutFetch } from '@/lib/shopify';
 import { CUSTOMER_TOKEN_COOKIE } from '@/lib/customerAuth';
-import { SHOPIFY_CART_COOKIE } from '@/lib/cartSession';
+import { SHOPIFY_CART_COOKIE } from '@/lib/constants/cookies';
 import { CartItem } from '@/types/cartTypes';
 
 interface CartCreateResponse {
