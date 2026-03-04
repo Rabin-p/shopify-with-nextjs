@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Heart, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import { useCartStore } from '@/lib/cartStore';
+import { useLocalWishlist } from '@/lib/wishlistLocal';
 
 const NAV_LINKS = [
   { href: '/products/all', label: 'Shop All' },
@@ -110,6 +111,7 @@ function NavbarActions({ signInUrl }: { signInUrl: string }) {
   });
 
   const isAuthenticated = data?.authenticated ?? false;
+  const { count: wishlistCount } = useLocalWishlist();
 
   const handleLogout = async () => {
     try {
@@ -159,6 +161,16 @@ function NavbarActions({ signInUrl }: { signInUrl: string }) {
           <Link href={signInUrl}>Sign in</Link>
         </Button>
       )}
+      <Button variant="ghost" size="icon" asChild>
+        <Link href="/wishlist" aria-label="Wishlist" className="relative">
+          <Heart className="h-4 w-4" />
+          {wishlistCount > 0 ? (
+            <span className="absolute -right-2 -top-2 rounded-full bg-foreground px-1.5 py-0.5 text-[10px] leading-none text-background">
+              {wishlistCount}
+            </span>
+          ) : null}
+        </Link>
+      </Button>
       <Button size="sm" onClick={toggleCart}>
         Cart ({cart.itemCount})
       </Button>
