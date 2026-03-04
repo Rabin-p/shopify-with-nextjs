@@ -10,11 +10,13 @@ import {
   useSearchParams,
 } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { Heart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProductNode } from "@/types/productTypes";
 import { useCartStore } from "@/lib/cartStore";
 import { isAnimatedImage } from "@/lib/isAnimatedImage";
+import { useLocalWishlist } from "@/lib/wishlistLocal";
 
 type ProductDetailsResponse = {
   success: boolean;
@@ -47,6 +49,7 @@ export default function ProductDetailsPage() {
   const pathname = usePathname();
   const handle = params?.handle || "";
   const { addToCart } = useCartStore();
+  const { isWishlisted, toggle: toggleWishlist } = useLocalWishlist();
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["product", handle],
@@ -74,6 +77,7 @@ export default function ProductDetailsPage() {
   const selectedPrice =
     selectedVariant?.priceV2 || product?.priceRange.minVariantPrice;
   const isSelectedVariantAvailable = Boolean(selectedVariant?.availableForSale);
+  const productIsWishlisted = product ? isWishlisted(product.id) : false;
 
   const updateVariantInUrl = useCallback(
     (variantId: string) => {
@@ -219,14 +223,32 @@ export default function ProductDetailsPage() {
             <p className="text-muted-foreground leading-relaxed">
               {product.description}
             </p>
-            <Button
-              onClick={handleAddToCart}
-              className="w-full md:w-auto cursor-pointer"
-              size="lg"
-              disabled={!isSelectedVariantAvailable}
-            >
-              {isSelectedVariantAvailable ? "Add to Cart" : "Out of stock"}
-            </Button>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Button
+                onClick={handleAddToCart}
+                className="w-full cursor-pointer sm:w-auto"
+                size="lg"
+                disabled={!isSelectedVariantAvailable}
+              >
+                {isSelectedVariantAvailable ? "Add to Cart" : "Out of stock"}
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                className="cursor-pointer"
+                onClick={() => {
+                  if (!product) return;
+                  toggleWishlist(product.id);
+                }}
+              >
+                <Heart
+                  className={`mr-2 h-4 w-4 ${
+                    productIsWishlisted ? "fill-current text-rose-600" : ""
+                  }`}
+                />
+                {productIsWishlisted ? "Saved" : "Save"}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

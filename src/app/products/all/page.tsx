@@ -4,7 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import {
+  useQuery,
+  keepPreviousData,
+} from '@tanstack/react-query';
+import { Heart } from 'lucide-react';
 import type { ProductNode } from '@/types/productTypes';
 import type {
   ProductFilterInput,
@@ -31,6 +35,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { isAnimatedImage } from '@/lib/isAnimatedImage';
+import { useLocalWishlist } from '@/lib/wishlistLocal';
 
 const SORT_OPTIONS = [
   { value: "FEATURED", label: "Featured", sortKey: "COLLECTION_DEFAULT", reverse: false },
@@ -166,6 +171,7 @@ export default function AllProductsPage() {
   });
 
   const products: ProductNode[] = data?.products || [];
+  const { productIds: wishlistIds, toggle: toggleWishlist } = useLocalWishlist();
   const availableFilters = data?.filters || [];
   const hasNextPage = data?.hasNextPage;
   const nextCursor = data?.nextCursor;
@@ -176,13 +182,13 @@ export default function AllProductsPage() {
         setCursorHistory((prev) => [...prev, nextCursor]);
       }
       setPageIndex((prev) => prev + 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' }); 
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   const handlePrevious = () => {
     setPageIndex((prev) => Math.max(prev - 1, 0));
-    window.scrollTo({ top: 0, behavior: 'smooth' }); 
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const getSelectedVariant = (product: ProductNode) => {
@@ -412,55 +418,77 @@ export default function AllProductsPage() {
                 : `/products/${product.handle}`;
 
               return (
-              <Card key={product.id} className="flex flex-col h-full hover:shadow-md transition-shadow">
-                <Link href={productHref} className="block flex-1">
-                  <div className="aspect-square relative">
-                    <Image
-                      src={product.featuredImage?.url || '/placeholder.png'}
-                      alt={product.title}
-                      fill
-                      unoptimized={isAnimatedImage(product.featuredImage?.url)}
-                      className="object-contain"
-                    />
-                  </div>
-                  <CardHeader>
-                    <CardTitle className="text-md line-clamp-1">{product.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground line-clamp-2">
-                    {product.description}
-                  </CardContent>
-                </Link>
-                <CardFooter className="mt-auto flex flex-col items-stretch gap-3">
-                  {variants.length > 1 && (
-                    <select
-                      value={selectedVariant?.id || ''}
-                      onChange={(e) => handleVariantChange(product.id, e.target.value)}
-                      className="w-full rounded-md border bg-background px-2 py-1 text-xs"
-                    >
-                      {variants.map((variant) => (
-                        <option key={variant.id} value={variant.id}>
-                          {variant.title}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <Badge> {selectedPrice.currencyCode} {selectedPrice.amount}</Badge>
-                  <Button
-                    size="sm"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleAddToCart(product);
-                    }}
-                    disabled={!isSelectedVariantAvailable}
-                    className='cursor-pointer'
-                  >
-                    {isSelectedVariantAvailable ? 'Add to Cart' : 'Out of stock'}
-                  </Button>
-                  </div>
-                </CardFooter>
-              </Card>
+                <Card key={product.id} className="flex flex-col h-full hover:shadow-md transition-shadow">
+                  <Link href={productHref} className="block flex-1">
+                    <div className="aspect-square relative">
+                      <Image
+                        src={product.featuredImage?.url || '/placeholder.png'}
+                        alt={product.title}
+                        fill
+                        unoptimized={isAnimatedImage(product.featuredImage?.url)}
+                        className="object-contain"
+                      />
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        className="absolute right-2 top-2 z-10 h-8 w-8 rounded-full"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleWishlist(product.id);
+                        }}
+                        aria-label={
+                          wishlistIds.includes(product.id)
+                            ? 'Remove from wishlist'
+                            : 'Add to wishlist'
+                        }
+                      >
+                        <Heart
+                          className={`h-4 w-4 ${wishlistIds.includes(product.id)
+                              ? 'fill-current text-rose-600'
+                              : ''
+                            }`}
+                        />
+                      </Button>
+                    </div>
+                    <CardHeader>
+                      <CardTitle className="text-md line-clamp-1">{product.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-sm text-muted-foreground line-clamp-2">
+                      {product.description}
+                    </CardContent>
+                  </Link>
+                  <CardFooter className="mt-auto flex flex-col items-stretch gap-3">
+                    {variants.length > 1 && (
+                      <select
+                        value={selectedVariant?.id || ''}
+                        onChange={(e) => handleVariantChange(product.id, e.target.value)}
+                        className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                      >
+                        {variants.map((variant) => (
+                          <option key={variant.id} value={variant.id}>
+                            {variant.title}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <Badge> {selectedPrice.currencyCode} {selectedPrice.amount}</Badge>
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleAddToCart(product);
+                        }}
+                        disabled={!isSelectedVariantAvailable}
+                        className='cursor-pointer'
+                      >
+                        {isSelectedVariantAvailable ? 'Add to Cart' : 'Out of stock'}
+                      </Button>
+                    </div>
+                  </CardFooter>
+                </Card>
               );
             })
           )}
