@@ -30,6 +30,10 @@ const PRODUCTS_QUERY = `
             handle
             description
             availableForSale
+            options {
+              name
+              values
+            }
             featuredImage {
               url
             }
@@ -39,6 +43,10 @@ const PRODUCTS_QUERY = `
                   id
                   title
                   availableForSale
+                  selectedOptions {
+                    name
+                    value
+                  }
                   priceV2 {
                     amount
                     currencyCode
@@ -98,6 +106,10 @@ const PRODUCTS_FALLBACK_QUERY = `
           vendor
           tags
           availableForSale
+          options {
+            name
+            values
+          }
           featuredImage {
             url
           }
@@ -107,6 +119,10 @@ const PRODUCTS_FALLBACK_QUERY = `
                 id
                 title
                 availableForSale
+                selectedOptions {
+                  name
+                  value
+                }
                 priceV2 {
                   amount
                   currencyCode

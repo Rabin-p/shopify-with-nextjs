@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -34,8 +35,11 @@ async function fetchProductsByIds(productIds: string[]) {
   return Array.isArray(data.products) ? data.products : [];
 }
 
+const getVariantUrlToken = (variantId: string) => variantId.split('/').pop() || variantId;
+
 export default function WishlistPage() {
   const router = useRouter();
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
   const { addToCart } = useCartStore();
   const {
     productIds: wishlistIds,
@@ -49,6 +53,47 @@ export default function WishlistPage() {
     enabled: wishlistIds.length > 0,
     staleTime: 15 * 1000,
   });
+
+  const getSelectedVariant = (product: ProductNode) => {
+    const variants = product.variants?.edges.map((edge) => edge.node) || [];
+    const selectedVariantId = selectedVariants[product.id];
+    return (
+      variants.find((variant) => variant.id === selectedVariantId) ||
+      variants.find((variant) => variant.availableForSale) ||
+      variants[0]
+    );
+  };
+
+  const handleVariantChange = (productId: string, variantId: string) => {
+    setSelectedVariants((prev) => ({
+      ...prev,
+      [productId]: variantId,
+    }));
+  };
+
+  const handleAddToCart = (product: ProductNode) => {
+    const selectedVariant = getSelectedVariant(product);
+    const isSelectedVariantAvailable = Boolean(selectedVariant?.availableForSale);
+    if (!selectedVariant?.id || !isSelectedVariantAvailable) return;
+
+    const variantTitle =
+      selectedVariant.title !== 'Default Title' ? selectedVariant.title : undefined;
+    const price = selectedVariant.priceV2 || product.priceRange.minVariantPrice;
+
+    addToCart({
+      id: selectedVariant.id,
+      title: product.title,
+      variantTitle,
+      handle: product.handle,
+      price: {
+        amount: price.amount,
+        currencyCode: price.currencyCode,
+      },
+      featuredImage: product.featuredImage,
+      variantId: selectedVariant.id,
+      productId: product.id,
+    });
+  };
 
   if (isLoading) {
     return (
@@ -98,13 +143,17 @@ export default function WishlistPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {products.map((product) => {
-            const defaultVariant = product.variants?.edges[0]?.node;
-            const price = defaultVariant?.priceV2 || product.priceRange.minVariantPrice;
-            const canAddToCart = Boolean(defaultVariant?.availableForSale);
+            const variants = product.variants?.edges.map((edge) => edge.node) || [];
+            const selectedVariant = getSelectedVariant(product);
+            const price = selectedVariant?.priceV2 || product.priceRange.minVariantPrice;
+            const canAddToCart = Boolean(selectedVariant?.availableForSale);
+            const productHref = selectedVariant
+              ? `/products/${product.handle}?variant=${encodeURIComponent(getVariantUrlToken(selectedVariant.id))}`
+              : `/products/${product.handle}`;
 
             return (
               <Card key={product.id} className="flex h-full flex-col">
-                <Link href={`/products/${product.handle}`} className="flex-1">
+                <Link href={productHref} className="flex-1">
                   <div className="relative aspect-square">
                     <Image
                       src={product.featuredImage?.url || '/placeholder.png'}
@@ -122,6 +171,19 @@ export default function WishlistPage() {
                   </CardContent>
                 </Link>
                 <CardFooter className="mt-auto flex flex-col items-stretch gap-3">
+                  {variants.length > 1 && (
+                    <select
+                      value={selectedVariant?.id || ''}
+                      onChange={(e) => handleVariantChange(product.id, e.target.value)}
+                      className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                    >
+                      {variants.map((variant) => (
+                        <option key={variant.id} value={variant.id}>
+                          {variant.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <div className="flex items-center justify-between">
                     <Badge>
                       {price.currencyCode} {price.amount}
@@ -136,25 +198,7 @@ export default function WishlistPage() {
                     </Button>
                   </div>
                   <Button
-                    onClick={() => {
-                      if (!defaultVariant?.id || !canAddToCart) return;
-                      addToCart({
-                        id: defaultVariant.id,
-                        title: product.title,
-                        variantTitle:
-                          defaultVariant.title !== 'Default Title'
-                            ? defaultVariant.title
-                            : undefined,
-                        handle: product.handle,
-                        price: {
-                          amount: price.amount,
-                          currencyCode: price.currencyCode,
-                        },
-                        featuredImage: product.featuredImage,
-                        variantId: defaultVariant.id,
-                        productId: product.id,
-                      });
-                    }}
+                    onClick={() => handleAddToCart(product)}
                     disabled={!canAddToCart}
                   >
                     {canAddToCart ? 'Add to Cart' : 'Out of stock'}

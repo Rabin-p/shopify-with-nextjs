@@ -10,6 +10,10 @@ const PRODUCT_BY_HANDLE_QUERY = `
       handle
       description
       availableForSale
+      options {
+        name
+        values
+      }
       featuredImage {
         url
       }
@@ -19,6 +23,10 @@ const PRODUCT_BY_HANDLE_QUERY = `
             id
             title
             availableForSale
+            selectedOptions {
+              name
+              value
+            }
             priceV2 {
               amount
               currencyCode
