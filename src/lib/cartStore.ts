@@ -25,6 +25,7 @@ interface CartStore {
   hydratePersistentCart: () => Promise<void>;
   syncPersistentCart: () => Promise<void>;
   disablePersistentCart: () => void;
+  verifyCheckoutStatus: () => Promise<void>;
   checkout: () => Promise<{
     success: boolean;
     checkoutUrl?: string;
@@ -264,9 +265,12 @@ export const useCartStore = create<CartStore>()(
           const data = await response.json();
 
           if (data.success) {
-            // Clear cart and close drawer on successful checkout
-            get().clearCart({ skipSync: true });
+            // Close drawer on successful checkout navigation string, but 
+            // DO NOT clear cart until they actually complete the purchase.
             get().closeCart();
+            if (typeof window !== 'undefined' && data.checkout?.id) {
+              window.localStorage.setItem('shopify_pending_checkout_id', data.checkout.id);
+            }
             return { success: true, checkoutUrl: data.checkoutUrl };
           } else {
             return { success: false, error: data.message || 'Checkout failed' };
@@ -278,6 +282,27 @@ export const useCartStore = create<CartStore>()(
               ? error.message
               : 'Failed to process checkout';
           return { success: false, error: message };
+        }
+      },
+
+      verifyCheckoutStatus: async () => {
+        if (typeof window === 'undefined') return;
+        
+        const cartId = window.localStorage.getItem('shopify_pending_checkout_id');
+        if (!cartId) return;
+
+        try {
+          const res = await fetch(`/api/checkout/status?cartId=${encodeURIComponent(cartId)}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.status === 'completed') {
+            get().clearCart({ skipSync: true });
+            window.localStorage.removeItem('shopify_pending_checkout_id');
+          } else if (data.status !== 'active') {
+             window.localStorage.removeItem('shopify_pending_checkout_id');
+          }
+        } catch (e) {
+          console.error('Failed to verify checkout status', e);
         }
       },
     }),

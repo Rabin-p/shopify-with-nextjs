@@ -4,19 +4,15 @@ import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import {
-  useQuery,
-  keepPreviousData,
-} from '@tanstack/react-query';
-import { Heart } from 'lucide-react';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { Heart, Loader2 } from 'lucide-react';
 import type { ProductNode } from '@/types/productTypes';
 import type {
   ProductFilterInput,
   ProductsResponse,
   SelectedFiltersState,
 } from '@/types/productFilterTypes';
-import { Card, CardFooter, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -27,13 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useCartStore } from '@/lib/cartStore';
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+
 import { isAnimatedImage } from '@/lib/isAnimatedImage';
 import { useLocalWishlist } from '@/lib/wishlistLocal';
 
@@ -135,17 +125,15 @@ const normalizeFilterInputs = (filterInputs: string[]) => {
 export default function AllProductsPage() {
   const router = useRouter();
   const pathname = usePathname();
-  const [cursorHistory, setCursorHistory] = useState<(string | null)[]>([null]);
-  const [pageIndex, setPageIndex] = useState(0);
   const [selectedSort, setSelectedSort] = useState<SortOptionValue>("FEATURED");
   const [selectedFilters, setSelectedFilters] = useState<SelectedFiltersState>({});
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [draftSort, setDraftSort] = useState<SortOptionValue>("FEATURED");
   const [draftFilters, setDraftFilters] = useState<SelectedFiltersState>({});
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
+  const [quickAddProduct, setQuickAddProduct] = useState<ProductNode | null>(null);
   const { addToCart } = useCartStore();
 
-  const currentCursor = cursorHistory[pageIndex];
   const activeFilterInputs = useMemo(
     () =>
       Object.values(selectedFilters)
@@ -158,38 +146,47 @@ export default function AllProductsPage() {
   const sortConfig =
     SORT_OPTIONS.find((option) => option.value === selectedSort) ?? SORT_OPTIONS[0];
 
-  const { data, isLoading, isPlaceholderData } = useQuery({
-    queryKey: ['products', currentCursor, sortConfig.sortKey, sortConfig.reverse, activeFilterInputs],
-    queryFn: () =>
+  const { 
+    data, 
+    isLoading, 
+    isFetching, 
+    isFetchingNextPage, 
+    hasNextPage, 
+    fetchNextPage,
+    isError,
+    error 
+  } = useInfiniteQuery({
+    queryKey: ['products', sortConfig.sortKey, sortConfig.reverse, activeFilterInputs],
+    queryFn: ({ pageParam }) =>
       fetchProducts({
-        cursor: currentCursor,
+        cursor: pageParam as string | null,
         sortKey: sortConfig.sortKey,
         reverse: sortConfig.reverse,
         selectedFilters: activeFilterInputs,
       }),
-    placeholderData: keepPreviousData,
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.hasNextPage ? lastPage.nextCursor : undefined,
   });
 
-  const products: ProductNode[] = data?.products || [];
+  const products: ProductNode[] = data?.pages.flatMap(page => page.products) || [];
   const { productIds: wishlistIds, toggle: toggleWishlist } = useLocalWishlist();
-  const availableFilters = data?.filters || [];
-  const hasNextPage = data?.hasNextPage;
-  const nextCursor = data?.nextCursor;
+  const availableFilters = data?.pages[0]?.filters || [];
 
-  const handleNext = () => {
-    if (hasNextPage && nextCursor) {
-      if (pageIndex + 1 >= cursorHistory.length) {
-        setCursorHistory((prev) => [...prev, nextCursor]);
-      }
-      setPageIndex((prev) => prev + 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          void fetchNextPage();
+        }
+      },
+      { rootMargin: '800px' } // Fetch exactly when reaching one row above
+    );
 
-  const handlePrevious = () => {
-    setPageIndex((prev) => Math.max(prev - 1, 0));
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+    const target = document.getElementById('infinite-scroll-trigger');
+    if (target) observer.observe(target);
+
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const getSelectedVariant = (product: ProductNode) => {
     const variants = product.variants?.edges.map((edge) => edge.node) || [];
@@ -231,9 +228,52 @@ export default function AllProductsPage() {
     }));
   };
 
-  const resetPagination = () => {
-    setCursorHistory([null]);
-    setPageIndex(0);
+  const handleOptionChange = (productId: string, optionName: string, optionValue: string, product: ProductNode) => {
+    const currentVariant = getSelectedVariant(product);
+    const variants = product.variants?.edges.map((e) => e.node) || [];
+    
+    const isAlreadySelected = currentVariant?.selectedOptions?.some((opt) => opt.name === optionName && opt.value === optionValue);
+    if (isAlreadySelected) return;
+
+    const currentOptionsMap = new Map<string, string>();
+    if (currentVariant?.selectedOptions) {
+      currentVariant.selectedOptions.forEach((opt) => currentOptionsMap.set(opt.name, opt.value));
+    }
+    currentOptionsMap.set(optionName, optionValue);
+    
+    let newVariant = variants.find((v) => {
+      const vOptions = v.selectedOptions || [];
+      return vOptions.every((opt) => currentOptionsMap.get(opt.name) === opt.value);
+    });
+    
+    if (!newVariant) {
+      newVariant = variants.find((v) => {
+        const vOptions = v.selectedOptions || [];
+        const match = vOptions.find((opt) => opt.name === optionName && opt.value === optionValue);
+        return !!match && v.availableForSale; 
+      });
+    }
+
+    if (!newVariant) {
+      newVariant = variants.find((v) => {
+        const vOptions = v.selectedOptions || [];
+        const match = vOptions.find((opt) => opt.name === optionName && opt.value === optionValue);
+        return !!match;
+      });
+    }
+
+    if (newVariant) {
+      handleVariantChange(productId, newVariant.id);
+    }
+  };
+
+  const clearAppliedFilters = () => {
+    setSelectedFilters({});
+  };
+
+  const applyDraftChanges = () => {
+    setSelectedSort(draftSort);
+    setSelectedFilters(normalizeFiltersState(draftFilters));
   };
 
   const cloneFiltersState = (filters: SelectedFiltersState): SelectedFiltersState =>
@@ -266,17 +306,6 @@ export default function AllProductsPage() {
     });
   };
 
-  const applyDraftChanges = () => {
-    setSelectedSort(draftSort);
-    setSelectedFilters(normalizeFiltersState(draftFilters));
-    resetPagination();
-  };
-
-  const clearAppliedFilters = () => {
-    setSelectedFilters({});
-    resetPagination();
-  };
-
   useEffect(() => {
     const params = new URLSearchParams();
     if (selectedSort !== "FEATURED") {
@@ -295,18 +324,26 @@ export default function AllProductsPage() {
   return (
     <div className="min-h-screen bg-background py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold">All Products</h1>
-          <p className="text-muted-foreground">Viewing Page {pageIndex + 1}</p>
+        <div className="mb-12 mt-4 flex flex-col items-center text-center">
+          <h1 className="mb-4 text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl">
+            Curated <span className="text-primary/80">Collection</span>
+          </h1>
+          <p className="max-w-2xl text-lg text-muted-foreground">
+            Discover our full range of premium products. Explore the finest selections tailored to your unique taste.
+          </p>
         </div>
 
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <Button onClick={() => handleDialogOpenChange(true)}>
+        <div className="mb-8 flex items-center justify-between gap-3 border-b pb-4">
+          <Button 
+            variant="outline" 
+            className="rounded-full shadow-sm"
+            onClick={() => handleDialogOpenChange(true)}
+          >
             Filter & Sort
             {activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
           </Button>
           {activeFilterCount > 0 ? (
-            <Button variant="outline" onClick={clearAppliedFilters}>
+            <Button variant="ghost" size="sm" onClick={clearAppliedFilters}>
               Clear filters
             </Button>
           ) : null}
@@ -402,10 +439,49 @@ export default function AllProductsPage() {
           </DialogContent>
         </Dialog>
 
-        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 transition-opacity ${isPlaceholderData ? 'opacity-50' : 'opacity-100'}`}>
+        <div className="relative min-h-[600px]">
+          {/* Initial/Global Loading State */}
+          {isFetching && products.length === 0 && !isError && (
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-background/80 backdrop-blur-xl transition-all duration-500 rounded-3xl border border-dashed border-border/60">
+              <div className="relative flex flex-col items-center">
+                 <div className="absolute inset-0 h-24 w-24 animate-ping rounded-full bg-primary/20 opacity-75" />
+                 <Loader2 className="relative h-16 w-16 animate-spin text-primary" />
+              </div>
+              <h2 className="mt-8 text-2xl font-bold tracking-tight">Curating your selection</h2>
+              <p className="mt-2 text-muted-foreground animate-pulse">This may take a moment while we fetch the latest products...</p>
+            </div>
+          )}
+
+          {/* Error State */}
+          {isError && (
+            <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-background p-8 text-center rounded-3xl border border-destructive/20 border-dashed">
+              <div className="mb-4 rounded-full bg-destructive/10 p-4">
+                <Heart className="h-10 w-10 text-destructive rotate-45" />
+              </div>
+              <h3 className="text-xl font-bold">Something went wrong</h3>
+              <p className="mt-2 text-muted-foreground max-w-md">
+                {error instanceof Error ? error.message : "We couldn't load the collection right now. Please try refreshing or checking your connection."}
+              </p>
+              <Button onClick={() => window.location.reload()} variant="outline" className="mt-6 rounded-full px-8">
+                Try Again
+              </Button>
+            </div>
+          )}
+
+          {/* Filter Loading Overlay (Subtle) */}
+          {!isLoading && isFetching && !isFetchingNextPage && products.length > 0 && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/30 backdrop-blur-[1px] transition-all duration-300 pointer-events-none">
+              <div className="flex items-center gap-3 rounded-full bg-background/90 px-6 py-3 shadow-2xl border border-border/40 translate-y-[-20%]">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                <span className="text-sm font-bold tracking-tight uppercase">Updating...</span>
+              </div>
+            </div>
+          )}
+
+          <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 transition-opacity duration-300 ${isLoading || (isFetching && !isFetchingNextPage) ? 'opacity-40' : 'opacity-100'}`}>
           {isLoading ? (
             Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="h-80 w-full bg-muted animate-pulse rounded-lg" />
+              <div key={i} className="h-[480px] w-full bg-muted/60 animate-pulse rounded-2xl border border-border/50" />
             ))
           ) : (
             products.map(product => {
@@ -416,22 +492,26 @@ export default function AllProductsPage() {
               const productHref = selectedVariant
                 ? `/products/${product.handle}?variant=${encodeURIComponent(getVariantUrlToken(selectedVariant.id))}`
                 : `/products/${product.handle}`;
+              
+              const hasMultipleOptions = variants.length > 1 && product.options && product.options.length > 0 && !product.options.every(opt => opt.name === 'Title' && opt.values.includes('Default Title'));
 
               return (
-                <Card key={product.id} className="flex flex-col h-full hover:shadow-md transition-shadow">
-                  <Link href={productHref} className="block flex-1">
-                    <div className="aspect-square relative">
+                <div key={product.id} className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-border/40 bg-card transition-all duration-500 hover:shadow-2xl hover:border-border/80">
+                  <Link href={productHref} className="block flex-1 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-t-2xl">
+                    <div className="relative aspect-4/5 overflow-hidden bg-muted/20">
                       <Image
                         src={product.featuredImage?.url || '/placeholder.png'}
                         alt={product.title}
                         fill
                         unoptimized={isAnimatedImage(product.featuredImage?.url)}
-                        className="object-contain"
+                        className="object-cover transition-transform duration-700 ease-out group-hover:scale-110"
                       />
+                      <div className="absolute inset-0 bg-black/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                      
                       <Button
                         variant="secondary"
                         size="icon"
-                        className="absolute right-2 top-2 z-10 h-8 w-8 rounded-full"
+                        className="absolute right-3 top-3 z-10 h-10 w-10 rounded-full bg-white/90 shadow-sm backdrop-blur-md transition-all hover:scale-110 hover:bg-white"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -444,84 +524,136 @@ export default function AllProductsPage() {
                         }
                       >
                         <Heart
-                          className={`h-4 w-4 ${wishlistIds.includes(product.id)
-                              ? 'fill-current text-rose-600'
-                              : ''
+                          className={`h-4 w-4 transition-colors ${wishlistIds.includes(product.id)
+                              ? 'fill-rose-500 text-rose-500'
+                              : 'text-zinc-600'
                             }`}
                         />
                       </Button>
                     </div>
-                    <CardHeader>
-                      <CardTitle className="text-md line-clamp-1">{product.title}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-sm text-muted-foreground line-clamp-2">
-                      {product.description}
-                    </CardContent>
-                  </Link>
-                  <CardFooter className="mt-auto flex flex-col items-stretch gap-3">
-                    {variants.length > 1 && (
-                      <select
-                        value={selectedVariant?.id || ''}
-                        onChange={(e) => handleVariantChange(product.id, e.target.value)}
-                        className="w-full rounded-md border bg-background px-2 py-1 text-xs"
-                      >
-                        {variants.map((variant) => (
-                          <option key={variant.id} value={variant.id}>
-                            {variant.title}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <div className="flex items-center justify-between">
-                      <Badge> {selectedPrice.currencyCode} {selectedPrice.amount}</Badge>
-                      <Button
-                        size="sm"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleAddToCart(product);
-                        }}
-                        disabled={!isSelectedVariantAvailable}
-                        className='cursor-pointer'
-                      >
-                        {isSelectedVariantAvailable ? 'Add to Cart' : 'Out of stock'}
-                      </Button>
+                    
+                    <div className="flex flex-1 flex-col p-5">
+                      <h3 className="text-lg font-semibold tracking-tight line-clamp-1">{product.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+                        {product.description}
+                      </p>
                     </div>
-                  </CardFooter>
-                </Card>
+                  </Link>
+                  
+                  <div className="mt-auto px-5 pb-5 flex flex-col gap-4">
+                    <div className="flex flex-col">
+                      <span className="text-lg font-bold text-foreground">
+                        {selectedPrice.currencyCode === 'USD' ? '$' : selectedPrice.currencyCode}{' '}
+                        {parseFloat(selectedPrice.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <Button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (hasMultipleOptions) {
+                          setQuickAddProduct(product);
+                        } else {
+                          handleAddToCart(product);
+                        }
+                      }}
+                      disabled={!hasMultipleOptions && !isSelectedVariantAvailable}
+                      className="w-full rounded-full py-5 font-semibold shadow-sm transition-all hover:scale-[1.02] active:scale-95"
+                    >
+                      {hasMultipleOptions 
+                        ? 'Choose Options' 
+                        : isSelectedVariantAvailable ? 'Add to Cart' : 'Sold Out'}
+                    </Button>
+                  </div>
+                </div>
               );
             })
           )}
+          </div>
         </div>
 
-        {/* Pagination UI */}
-        <div className="mt-10">
-          <Pagination>
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  href="#"
-                  onClick={(e) => { e.preventDefault(); handlePrevious(); }}
-                  className={pageIndex === 0 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                />
-              </PaginationItem>
-
-              <PaginationItem>
-                <span className="px-4 text-sm font-medium">
-                  Page {pageIndex + 1}
-                </span>
-              </PaginationItem>
-
-              <PaginationItem>
-                <PaginationNext
-                  href="#"
-                  onClick={(e) => { e.preventDefault(); handleNext(); }}
-                  className={!hasNextPage ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
+        {/* Infinite Scroll Trigger & UI */}
+        <div id="infinite-scroll-trigger" className="mt-14 flex flex-col items-center justify-center p-4">
+          {isFetchingNextPage ? (
+            <div className="flex items-center gap-3 text-muted-foreground">
+              <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-foreground" />
+              <span className="text-sm font-medium">Loading more products...</span>
+            </div>
+          ) : !hasNextPage && products.length > 0 ? (
+            <div className="text-sm text-muted-foreground">End of the collection</div>
+          ) : null}
         </div>
+        {/* Quick Add Dialog */}
+        <Dialog open={!!quickAddProduct} onOpenChange={(open) => !open && setQuickAddProduct(null)}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>{quickAddProduct?.title}</DialogTitle>
+            </DialogHeader>
+            {quickAddProduct && (() => {
+               const variantOptions = quickAddProduct.options || [];
+               const quickVariant = getSelectedVariant(quickAddProduct);
+               const isQuickVariantAvailable = Boolean(quickVariant?.availableForSale);
+               const quickPrice = quickVariant?.priceV2 || quickAddProduct.priceRange.minVariantPrice;
+
+               return (
+                 <div className="py-2">
+                    <div className="mb-4">
+                      {variantOptions.map((option) => {
+                        if (option.name === 'Title' && option.values.includes('Default Title')) return null;
+                        return (
+                          <div key={option.name} className="mb-4 last:mb-0">
+                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">{option.name}</span>
+                            <div className="flex flex-wrap gap-2">
+                              {option.values.map(val => {
+                                const isSelected = quickVariant?.selectedOptions?.find(
+                                  (so) => so.name === option.name && so.value === val
+                                ) !== undefined;
+
+                                return (
+                                  <button
+                                    key={val}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      handleOptionChange(quickAddProduct.id, option.name, val, quickAddProduct);
+                                    }}
+                                    className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-all ${
+                                      isSelected 
+                                        ? 'bg-foreground text-background border-foreground shadow-sm' 
+                                        : 'bg-background hover:bg-muted text-foreground border-input/60'
+                                    }`}
+                                  >
+                                    {val}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    
+                    <div className="flex items-center justify-between gap-4 mt-6 pt-4 border-t">
+                      <span className="text-xl font-bold text-foreground">
+                        {quickPrice.currencyCode === 'USD' ? '$' : quickPrice.currencyCode}{' '}
+                        {parseFloat(quickPrice.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                      <Button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleAddToCart(quickAddProduct);
+                          setQuickAddProduct(null);
+                        }}
+                        disabled={!isQuickVariantAvailable}
+                        className="rounded-full px-8 font-semibold shadow-sm transition-all hover:scale-105 active:scale-95"
+                      >
+                        {isQuickVariantAvailable ? 'Add to Cart' : 'Sold Out'}
+                      </Button>
+                    </div>
+                 </div>
+               );
+            })()}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

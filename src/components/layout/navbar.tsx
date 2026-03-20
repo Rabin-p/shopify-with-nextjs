@@ -95,6 +95,7 @@ function NavbarActions({ signInUrl }: { signInUrl: string }) {
     toggleCart,
     hydratePersistentCart,
     disablePersistentCart,
+    verifyCheckoutStatus,
   } = useCartStore();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -135,6 +136,11 @@ function NavbarActions({ signInUrl }: { signInUrl: string }) {
 
     disablePersistentCart();
   }, [disablePersistentCart, hydratePersistentCart, isAuthenticated]);
+
+  useEffect(() => {
+    // Check if there is an unhandled completed checkout in localStorage
+    void verifyCheckoutStatus();
+  }, [verifyCheckoutStatus]);
 
   return (
     <div className="flex items-center gap-2">
