@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Heart, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -9,6 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { useCartStore } from '@/lib/cartStore';
 import { useLocalWishlist } from '@/lib/wishlistLocal';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 const NAV_LINKS = [
   { href: '/products/all', label: 'Shop All' },
@@ -21,6 +23,10 @@ type PredictiveProduct = {
   id: string;
   title: string;
   handle: string;
+  featuredImage?: {
+    url: string;
+    altText?: string | null;
+  } | null;
   priceRange?: {
     minVariantPrice?: {
       amount: string;
@@ -144,6 +150,7 @@ function NavbarActions({ signInUrl }: { signInUrl: string }) {
 
   return (
     <div className="flex items-center gap-2">
+      <ThemeToggle />
       {isLoading ? (
         <Button variant="ghost" size="sm" disabled>
           ...
@@ -306,15 +313,26 @@ function PredictiveSearch() {
                       setQuery('');
                       setActiveIndex(-1);
                     }}
-                    className={`flex items-center justify-between gap-3 px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground ${
+                    className={`flex items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground ${
                       resolvedActiveIndex === index
                         ? 'bg-accent text-accent-foreground'
                         : ''
                     }`}
                   >
-                    <span className="line-clamp-1">{product.title}</span>
+                    {product.featuredImage?.url && (
+                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border bg-muted">
+                        <Image
+                          src={product.featuredImage.url}
+                          alt={product.featuredImage.altText || product.title}
+                          fill
+                          className="object-cover"
+                          sizes="40px"
+                        />
+                      </div>
+                    )}
+                    <span className="line-clamp-2 flex-grow font-medium">{product.title}</span>
                     {product.priceRange?.minVariantPrice ? (
-                      <span className="shrink-0 text-xs text-muted-foreground">
+                      <span className="shrink-0 text-xs font-semibold text-muted-foreground">
                         {product.priceRange.minVariantPrice.currencyCode}{' '}
                         {product.priceRange.minVariantPrice.amount}
                       </span>

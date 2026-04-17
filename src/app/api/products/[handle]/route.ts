@@ -17,6 +17,12 @@ const PRODUCT_BY_HANDLE_QUERY = `
       featuredImage {
         url
       }
+      reviewsRating: metafield(namespace: "reviews", key: "rating") {
+        value
+      }
+      reviewsCount: metafield(namespace: "reviews", key: "rating_count") {
+        value
+      }
       variants(first: 50) {
         edges {
           node {

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   useParams,
   usePathname,
@@ -56,6 +56,20 @@ export default function ProductDetailsPage() {
     queryFn: () => fetchProductByHandle(handle),
     enabled: Boolean(handle),
   });
+
+  // Local Custom Reviews System
+  const { data: localReviewsData, refetch: refetchLocalReviews } = useQuery({
+    queryKey: ["product-reviews-local", handle],
+    queryFn: async () => {
+      const res = await fetch(`/api/products/${encodeURIComponent(handle)}/reviews`);
+      if (!res.ok) return { reviews: [] };
+      return res.json();
+    },
+    enabled: Boolean(handle),
+  });
+  
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [reviewForm, setReviewForm] = useState({ author: '', rating: 5, content: '' });
 
   const product = data?.product;
   const variants = useMemo(
@@ -214,6 +228,59 @@ export default function ProductDetailsPage() {
     );
   }
 
+  let shopifyRatingValue = 5.0;
+  let shopifyReviewCount = 0;
+  
+  if (product?.reviewsRating?.value) {
+    try {
+      const parsed = JSON.parse(product.reviewsRating.value);
+      shopifyRatingValue = parseFloat(parsed.value || parsed);
+    } catch {
+      shopifyRatingValue = parseFloat(product.reviewsRating.value);
+    }
+  }
+  if (product?.reviewsCount?.value) {
+    shopifyReviewCount = parseInt(product.reviewsCount.value, 10);
+  }
+
+  // Combine Shopify Source of Truth + Local Database Reviews
+  const localReviews = localReviewsData?.reviews || [];
+  const localReviewsCount = localReviews.length;
+  
+  let ratingValue = shopifyRatingValue;
+  let reviewCount = shopifyReviewCount;
+
+  if (localReviewsCount > 0) {
+    const localTotalScore = localReviews.reduce((acc: number, rev: any) => acc + rev.rating, 0);
+    const combinedTotalScore = (shopifyRatingValue * shopifyReviewCount) + localTotalScore;
+    reviewCount = shopifyReviewCount + localReviewsCount;
+    ratingValue = reviewCount > 0 ? combinedTotalScore / reviewCount : 5.0;
+  }
+
+  const handleReviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!product) return;
+    setIsSubmittingReview(true);
+    try {
+      const res = await fetch(`/api/products/${encodeURIComponent(handle)}/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...reviewForm, productId: product.id }),
+      });
+      if (res.ok) {
+        setReviewForm({ author: '', rating: 5, content: '' });
+        alert('Review submitted successfully!');
+        void refetchLocalReviews();
+      } else {
+        alert('Failed to submit review.');
+      }
+    } catch (e) {
+      alert('Error submitting review.');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
@@ -250,10 +317,12 @@ export default function ProductDetailsPage() {
             <div className="mb-4 flex items-center gap-2">
               <div className="flex text-amber-500">
                 {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-4 w-4 fill-current" />
+                  <Star key={i} className={`h-4 w-4 ${i < Math.round(ratingValue) ? "fill-current" : "fill-transparent border-amber-500 opacity-50"}`} />
                 ))}
               </div>
-              <span className="text-xs font-semibold text-muted-foreground">4.9 (124 reviews)</span>
+              <span className="text-xs font-semibold text-muted-foreground">
+                {reviewCount > 0 ? `${ratingValue.toFixed(1)} (${reviewCount} reviews)` : 'No reviews yet'}
+              </span>
             </div>
 
             <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-foreground mb-4 leading-tight">
@@ -402,6 +471,104 @@ export default function ProductDetailsPage() {
             </div>
           </div>
         </div>
+
+        {/* Customer Reviews Section */}
+        <div className="mt-24 pt-16 border-t border-border/80 w-full">
+          <div className="flex flex-col md:flex-row gap-16">
+            <div className="md:w-1/3">
+              <h2 className="text-3xl font-extrabold tracking-tight mb-4">Customer Reviews</h2>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="text-5xl font-black">{ratingValue.toFixed(1)}</div>
+                <div>
+                  <div className="flex text-amber-500 mb-1">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className={`h-4 w-4 ${i < Math.round(ratingValue) ? "fill-current" : "fill-transparent border-amber-500 opacity-50"}`} />
+                    ))}
+                  </div>
+                  <p className="text-sm text-muted-foreground font-medium">Based on {reviewCount} reviews</p>
+                </div>
+              </div>
+              
+              <div className="bg-muted/30 rounded-3xl p-6 border border-border/40 mt-8">
+                <h3 className="font-bold text-lg mb-4">Write a Review</h3>
+                <form onSubmit={handleReviewSubmit} className="space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rating</label>
+                    <div className="flex gap-1 mt-2">
+                       {[1, 2, 3, 4, 5].map((star) => (
+                         <Star 
+                           key={star} 
+                           className={`h-6 w-6 cursor-pointer transition-transform hover:scale-110 ${star <= reviewForm.rating ? "fill-amber-500 text-amber-500" : "fill-transparent text-muted-foreground"}`} 
+                           onClick={() => setReviewForm({ ...reviewForm, rating: star })}
+                         />
+                       ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-2">Name</label>
+                    <input 
+                      required 
+                      type="text" 
+                      className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                      value={reviewForm.author}
+                      onChange={(e) => setReviewForm({...reviewForm, author: e.target.value})}
+                      placeholder="Your name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-2">Review</label>
+                    <textarea 
+                      required 
+                      rows={4}
+                      className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:border-primary resize-none"
+                      value={reviewForm.content}
+                      onChange={(e) => setReviewForm({...reviewForm, content: e.target.value})}
+                      placeholder="What did you think about this product?"
+                    />
+                  </div>
+                  <Button type="submit" className="w-full font-bold shadow-md" disabled={isSubmittingReview}>
+                    {isSubmittingReview ? "Submitting..." : "Submit Review"}
+                  </Button>
+                </form>
+              </div>
+            </div>
+
+            <div className="md:w-2/3 space-y-6">
+              {localReviews.length === 0 && reviewCount === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center p-12 bg-muted/10 rounded-3xl border border-dashed text-center">
+                  <Star className="h-10 w-10 text-muted-foreground/40 mb-4" />
+                  <h4 className="text-lg font-bold">No reviews yet</h4>
+                  <p className="text-muted-foreground text-sm mt-1">Be the first to review this product!</p>
+                </div>
+              ) : (
+                <>
+                  {localReviews.map((review: any) => (
+                    <div key={review.id} className="p-6 rounded-3xl border bg-card">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <p className="font-bold">{review.author}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(review.createdAt).toLocaleDateString()}</p>
+                        </div>
+                        <div className="flex text-amber-500">
+                          {[...Array(5)].map((_, i) => (
+                            <Star key={i} className={`h-3 w-3 ${i < review.rating ? "fill-current" : "fill-transparent border-amber-500 opacity-50"}`} />
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-muted-foreground leading-relaxed">{review.content}</p>
+                    </div>
+                  ))}
+                  {shopifyReviewCount > 0 && (
+                     <div className="p-6 rounded-3xl border bg-card/50 text-center text-muted-foreground">
+                        <p className="font-medium">+ {shopifyReviewCount} verified reviews imported from Shopify</p>
+                     </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
