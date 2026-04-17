@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { X, Plus, Minus, Trash2, ShoppingBag, Loader2 } from 'lucide-react';
 import { useCartStore } from '@/lib/cartStore';
 import { isAnimatedImage } from '@/lib/isAnimatedImage';
+import { useQuery } from '@tanstack/react-query';
 
 export function CartDrawer() {
   const {
@@ -17,6 +18,7 @@ export function CartDrawer() {
     isOpen,
     closeCart,
     checkout,
+    addToCart,
   } = useCartStore();
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
@@ -26,6 +28,21 @@ export function CartDrawer() {
       currency: currencyCode,
     }).format(parseFloat(amount));
   };
+
+  const currentProductId = cart.items.length > 0 ? (cart.items[cart.items.length - 1] as any).productId : null;
+
+  const { data: recommendations = [] } = useQuery<any[]>({
+    queryKey: ['product-recommendations', currentProductId],
+    queryFn: async () => {
+      if (!currentProductId) return [];
+      const res = await fetch(`/api/products/recommendations?productId=${encodeURIComponent(currentProductId)}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.recommendations || [];
+    },
+    enabled: !!currentProductId && isOpen,
+    staleTime: 60 * 1000,
+  });
 
   const handleCheckout = async () => {
     try {
@@ -208,6 +225,63 @@ export function CartDrawer() {
                         ))}
                       </div>
                     </div>
+
+                    {/* Recommendations */}
+                    {recommendations.length > 0 && (
+                      <div className="border-t bg-muted/20 px-6 py-4">
+                        <h3 className="mb-3 text-sm font-semibold text-foreground">You may also like</h3>
+                        <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
+                          {recommendations.map(product => {
+                            const variant = product.variants?.edges[0]?.node;
+                            const price = variant?.priceV2 || product.priceRange?.minVariantPrice || { amount: '0', currencyCode: 'USD' };
+                            return (
+                              <div key={product.id} className="min-w-[140px] max-w-[140px] shrink-0 snap-start flex flex-col gap-2 rounded-lg border border-border/50 bg-background p-2 transition-transform hover:shadow-sm">
+                                <div className="relative aspect-square w-full overflow-hidden rounded-md bg-muted">
+                                  {product.featuredImage && (
+                                    <Image
+                                      src={product.featuredImage.url}
+                                      alt={product.title}
+                                      fill
+                                      className="object-cover"
+                                      sizes="120px"
+                                      unoptimized={isAnimatedImage(product.featuredImage.url)}
+                                    />
+                                  )}
+                                </div>
+                                <div className="flex flex-1 flex-col">
+                                  <span className="line-clamp-2 text-xs font-medium text-foreground">{product.title}</span>
+                                  <span className="mt-1 text-xs font-semibold text-muted-foreground">{formatPrice(price.amount, price.currencyCode)}</span>
+                                </div>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  className="mt-auto h-8 text-xs font-semibold"
+                                  disabled={!variant?.availableForSale}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    if (!variant) return;
+                                    addToCart({
+                                      id: variant.id,
+                                      title: product.title,
+                                      handle: product.handle,
+                                      price: {
+                                        amount: price.amount,
+                                        currencyCode: price.currencyCode,
+                                      },
+                                      featuredImage: product.featuredImage,
+                                      variantId: variant.id,
+                                      productId: product.id,
+                                    });
+                                  }}
+                                >
+                                  {variant?.availableForSale ? 'Add' : 'Sold Out'}
+                                </Button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Footer */}
                     <div className="border-t p-6">

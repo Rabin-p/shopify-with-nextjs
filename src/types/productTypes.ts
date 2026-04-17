@@ -11,6 +11,12 @@ export interface ProductNode {
   featuredImage?: {
     url: string;
   };
+  reviewsRating?: {
+    value: string;
+  } | null;
+  reviewsCount?: {
+    value: string;
+  } | null;
   variants?: {
     edges: {
       node: {

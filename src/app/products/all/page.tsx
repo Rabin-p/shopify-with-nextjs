@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { Heart, Loader2 } from 'lucide-react';
+import { Heart, Loader2, Star } from 'lucide-react';
 import type { ProductNode } from '@/types/productTypes';
 import type {
   ProductFilterInput,
@@ -533,6 +533,29 @@ export default function AllProductsPage() {
                     </div>
                     
                     <div className="flex flex-1 flex-col p-5">
+                      {(() => {
+                        let ratingValue = 5.0;
+                        let reviewCount = 0;
+                        if (product?.reviewsRating?.value) {
+                          try {
+                            const parsed = JSON.parse(product.reviewsRating.value);
+                            ratingValue = parseFloat(parsed.value || parsed);
+                          } catch {
+                            ratingValue = parseFloat(product.reviewsRating.value);
+                          }
+                        }
+                        if (product?.reviewsCount?.value) {
+                          reviewCount = parseInt(product.reviewsCount.value, 10);
+                        }
+                        if (reviewCount === 0) return null;
+                        
+                        return (
+                          <div className="mb-2 flex items-center gap-1.5 opacity-90">
+                            <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
+                            <span className="text-xs font-semibold text-muted-foreground">{ratingValue.toFixed(1)} ({reviewCount})</span>
+                          </div>
+                        );
+                      })()}
                       <h3 className="text-lg font-semibold tracking-tight line-clamp-1">{product.title}</h3>
                       <p className="mt-1 text-sm text-muted-foreground line-clamp-2 leading-relaxed">
                         {product.description}
