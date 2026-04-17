@@ -86,3 +86,23 @@ This document serves as an architectural overview and technical reference for AI
 ## 11. SEO Constraints
 
 - AI agents generating new pages must include exported Next.js `metadata` or `generateMetadata` functions containing `title`, `description`, and OpenGraph tags to ensure products show up perfectly on social media and Google.
+
+## 12. Advanced Feature Architecture Documentation
+
+- **Custom Reviews System (Local SQLite):**
+  - **Database:** Uses `better-sqlite3` strictly in server environments to store text reviews in a `.data/reviews.db` file. This avoids filesystem race conditions and stateless deployment wipes during dev.
+  - **Endpoints:** The `src/app/api/products/[handle]/reviews/route.ts` manages SQL read/writes.
+  - **Hybrid UI Math:** The frontend (`app/products/[handle]/page.tsx`) queries the Shopify Storefront API for the baseline `reviews.rating` metafield, then dynamically merges it with the local SQLite data to compute accurate real-time review counts.
+
+- **Predictive Search Engine:**
+  - Implemented in `Navbar` (`navbar.tsx`), debouncing text input and querying `/api/search/predictive`.
+  - Supports image thumbnail injections using Next.js `<Image>` preconfigured to allow `cdn.shopify.com` optimization.
+
+- **In-Cart Upsells and Cross-Sells:**
+  - Integrated directly into `cart-drawer.tsx` using `@tanstack/react-query`.
+  - Driven by the Storefront API `productRecommendations` query (Intent: `RELATED`), injecting a visually scrollable recommendation carousel below the active cart items.
+
+- **Dark / Light Mode Theme Toggle:**
+  - Utilizes `next-themes` via `src/components/theme-provider.tsx`.
+  - Wrapped around the router in `layout.tsx` (using `suppressHydrationWarning` on the `<html>` root specifically to prevent React dom mismatch exceptions).
+  - Toggled efficiently via the `lucide-react` animated `<ThemeToggle />` component in the Navbar.
