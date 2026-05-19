@@ -121,3 +121,46 @@ export async function shopifyCheckoutFetch<T>({
     throw error;
   }
 }
+
+// Admin API fetch function (requires Shopify Admin Access Token with Metaobject read/write scopes)
+export async function adminShopifyFetch<T>({
+  query,
+  variables = {},
+}: {
+  query: string;
+  variables?: Record<string, unknown>;
+}): Promise<T> {
+  const adminToken = process.env.NEXT_APP_ACCESS_TOKEN || process.env.SHOPIFY_ADMIN_ACCESS_TOKEN || process.env.NEXT_PRIVATE_SHOPIFY_STOREFRONT_ACCESS_TOKEN;
+  
+  if (!adminToken) {
+    throw new Error('Missing Admin API access token.');
+  }
+
+  try {
+    const response = await fetch(`https://${storeDomain}/admin/api/2024-01/graphql.json`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': adminToken,
+      },
+      body: JSON.stringify({ query, variables }),
+      cache: 'no-store', // Avoid caching for mutation-heavy routes
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      const errorMessage = result.errors[0]?.message || 'Admin API Error';
+      throw new Error(`Shopify Admin API Error: ${errorMessage}`);
+    }
+
+    if (!result.data) {
+      throw new Error('No data returned from Shopify Admin API');
+    }
+
+    return result.data as T;
+  } catch (error) {
+    console.error('Shopify Admin API fetch error:', error);
+    throw error;
+  }
+}
