@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { adminShopifyFetch } from '@/lib/shopify';
 
+export const dynamic = 'force-dynamic';
+
 export type Review = {
   id: string;
   productId: string;
