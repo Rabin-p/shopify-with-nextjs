@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server';
-import Database from 'better-sqlite3';
-import path from 'path';
-
-const dbPath = path.join(process.cwd(), '.data', 'reviews.db');
+import { adminShopifyFetch } from '@/lib/shopify';
 
 export type Review = {
   id: string;
@@ -14,48 +11,90 @@ export type Review = {
   createdAt: string;
 };
 
-// Singleton connection to local SQLite database
-let dbInstance: Database.Database | null = null;
-
-function getDb(): Database.Database {
-  if (!dbInstance) {
-    dbInstance = new Database(dbPath);
-    // Initialize schema
-    dbInstance.exec(`
-      CREATE TABLE IF NOT EXISTS reviews (
-        id TEXT PRIMARY KEY,
-        productId TEXT NOT NULL,
-        handle TEXT NOT NULL,
-        author TEXT NOT NULL,
-        rating INTEGER NOT NULL,
-        content TEXT NOT NULL,
-        createdAt TEXT NOT NULL
-      );
-    `);
+const GET_REVIEWS_QUERY = `
+  query GetReviews($type: String!) {
+    metaobjects(type: $type, first: 250) {
+      edges {
+        node {
+          id
+          updatedAt
+          fields {
+            key
+            value
+          }
+        }
+      }
+    }
   }
-  return dbInstance;
-}
+`;
 
-// GET: Fetch reviews from SQLite database
+const CREATE_REVIEW_MUTATION = `
+  mutation CreateReviewMetaobject($metaobject: MetaobjectCreateInput!) {
+    metaobjectCreate(metaobject: $metaobject) {
+      metaobject {
+        id
+        updatedAt
+        fields {
+          key
+          value
+        }
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+// GET: Fetch reviews from Shopify Metaobjects
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ handle: string }> }
 ) {
   try {
     const { handle } = await params;
-    const db = getDb();
     
-    const stmt = db.prepare('SELECT * FROM reviews WHERE handle = ? ORDER BY createdAt DESC');
-    const productReviews = stmt.all(handle);
+    // Fetch all 'review' metaobjects using Admin API
+    const data = await adminShopifyFetch<any>({
+      query: GET_REVIEWS_QUERY,
+      variables: { type: 'review' },
+    });
+
+    const edges = data?.metaobjects?.edges || [];
+    
+    // Transform and filter by product handle
+    const allReviews: Review[] = edges.map((edge: any) => {
+      const node = edge.node;
+      const fields = node.fields.reduce((acc: any, field: any) => {
+        acc[field.key] = field.value;
+        return acc;
+      }, {});
+
+      return {
+        id: node.id,
+        productId: fields.product_id || '',
+        handle: fields.product_handle || '',
+        author: fields.author || 'Anonymous',
+        rating: fields.rating ? Number(fields.rating) : 5,
+        content: fields.content || '',
+        createdAt: fields.created_at || node.updatedAt,
+      };
+    });
+
+    const productReviews = allReviews
+      .filter((r) => r.handle === handle)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     return NextResponse.json({ success: true, reviews: productReviews });
   } catch (error) {
-    console.error('Failed to get reviews:', error);
+    console.error('Failed to get reviews from Shopify:', error);
+    // If Admin API fails (e.g. scopes missing), return empty array so frontend doesn't crash
     return NextResponse.json({ success: false, reviews: [] }, { status: 500 });
   }
 }
 
-// POST: Safely create a new review in the SQLite database
+// POST: Create a new review in Shopify Metaobjects
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ handle: string }> }
@@ -70,37 +109,48 @@ export async function POST(
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 });
     }
 
-    const db = getDb();
+    const createdAt = new Date().toISOString();
 
-    // Create record
+    const metaobjectInput = {
+      type: "review",
+      capabilities: {
+        publishable: {
+          status: "ACTIVE"
+        }
+      },
+      fields: [
+        { key: "product_id", value: productId },
+        { key: "product_handle", value: handle },
+        { key: "author", value: author },
+        { key: "rating", value: rating.toString() },
+        { key: "content", value: content },
+        { key: "created_at", value: createdAt }
+      ]
+    };
+
+    const data = await adminShopifyFetch<any>({
+      query: CREATE_REVIEW_MUTATION,
+      variables: { metaobject: metaobjectInput },
+    });
+
+    if (data?.metaobjectCreate?.userErrors?.length > 0) {
+      console.error("Metaobject creation errors:", data.metaobjectCreate.userErrors);
+      throw new Error(data.metaobjectCreate.userErrors[0].message);
+    }
+
     const newReview: Review = {
-      id: Math.random().toString(36).substring(2, 16),
+      id: data?.metaobjectCreate?.metaobject?.id || Math.random().toString(),
       productId,
       handle,
       author,
       rating: Number(rating),
       content,
-      createdAt: new Date().toISOString(),
+      createdAt,
     };
-
-    // Use prepared statements with named parameters to prevent SQL injection vulnerabilities
-    const stmt = db.prepare(`
-      INSERT INTO reviews (id, productId, handle, author, rating, content, createdAt)
-      VALUES (@id, @productId, @handle, @author, @rating, @content, @createdAt)
-    `);
-    
-    stmt.run(newReview);
-
-    /** 
-     * NOTE FOR PRODUCTION / SHOPIFY SYNC:
-     * Natively update the live Shopify Metafield using the Storefront Admin API.
-     * Use `db.prepare('SELECT AVG(rating) as avg, COUNT(*) as count FROM reviews WHERE productId = ?').get(productId)`
-     * to safely compute the exact final average, then push the new scalar via Shopify Admin GraphQL.
-     */
 
     return NextResponse.json({ success: true, review: newReview });
   } catch (error) {
-    console.error('Failed to post review:', error);
-    return NextResponse.json({ success: false, message: 'Failed to create review' }, { status: 500 });
+    console.error('Failed to post review to Shopify:', error);
+    return NextResponse.json({ success: false, message: 'Failed to create review. Check API scopes.' }, { status: 500 });
   }
 }

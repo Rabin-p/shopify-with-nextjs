@@ -42,6 +42,25 @@ const fetchProductByHandle = async (
   return res.json();
 };
 
+const StarRating = ({ rating, size = 16, className = "" }: { rating: number, size?: number, className?: string }) => {
+  return (
+    <div className={`flex gap-0.5 ${className}`}>
+      {[1, 2, 3, 4, 5].map((star) => {
+        const fillPercentage = Math.max(0, Math.min(100, (rating - star + 1) * 100));
+        return (
+          <div key={star} className="relative" style={{ width: size, height: size }}>
+            <Star className="absolute inset-0 text-amber-500/30 fill-transparent" style={{ width: size, height: size }} />
+            <div className="absolute top-0 left-0 h-full overflow-hidden" style={{ width: `${fillPercentage}%` }}>
+              <Star className="text-amber-500 fill-amber-500" style={{ width: size, height: size, maxWidth: 'none' }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+
 export default function ProductDetailsPage() {
   const params = useParams<{ handle: string }>();
   const searchParams = useSearchParams();
@@ -228,7 +247,7 @@ export default function ProductDetailsPage() {
     );
   }
 
-  let shopifyRatingValue = 5.0;
+  let shopifyRatingValue = 0.0;
   let shopifyReviewCount = 0;
   
   if (product?.reviewsRating?.value) {
@@ -254,7 +273,7 @@ export default function ProductDetailsPage() {
     const localTotalScore = localReviews.reduce((acc: number, rev: any) => acc + rev.rating, 0);
     const combinedTotalScore = (shopifyRatingValue * shopifyReviewCount) + localTotalScore;
     reviewCount = shopifyReviewCount + localReviewsCount;
-    ratingValue = reviewCount > 0 ? combinedTotalScore / reviewCount : 5.0;
+    ratingValue = reviewCount > 0 ? combinedTotalScore / reviewCount : 0.0;
   }
 
   const handleReviewSubmit = async (e: React.FormEvent) => {
@@ -269,13 +288,12 @@ export default function ProductDetailsPage() {
       });
       if (res.ok) {
         setReviewForm({ author: '', rating: 5, content: '' });
-        alert('Review submitted successfully!');
         void refetchLocalReviews();
       } else {
-        alert('Failed to submit review.');
+        console.error('Failed to submit review.');
       }
     } catch (e) {
-      alert('Error submitting review.');
+      console.error('Error submitting review.', e);
     } finally {
       setIsSubmittingReview(false);
     }
@@ -315,11 +333,7 @@ export default function ProductDetailsPage() {
           {/* Details Section */}
           <div className="flex flex-col h-full py-4">
             <div className="mb-4 flex items-center gap-2">
-              <div className="flex text-amber-500">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className={`h-4 w-4 ${i < Math.round(ratingValue) ? "fill-current" : "fill-transparent border-amber-500 opacity-50"}`} />
-                ))}
-              </div>
+              <StarRating rating={ratingValue} size={16} />
               <span className="text-xs font-semibold text-muted-foreground">
                 {reviewCount > 0 ? `${ratingValue.toFixed(1)} (${reviewCount} reviews)` : 'No reviews yet'}
               </span>
@@ -480,10 +494,8 @@ export default function ProductDetailsPage() {
               <div className="flex items-center gap-3 mb-6">
                 <div className="text-5xl font-black">{ratingValue.toFixed(1)}</div>
                 <div>
-                  <div className="flex text-amber-500 mb-1">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className={`h-4 w-4 ${i < Math.round(ratingValue) ? "fill-current" : "fill-transparent border-amber-500 opacity-50"}`} />
-                    ))}
+                  <div className="mb-1">
+                    <StarRating rating={ratingValue} size={16} />
                   </div>
                   <p className="text-sm text-muted-foreground font-medium">Based on {reviewCount} reviews</p>
                 </div>
@@ -496,11 +508,14 @@ export default function ProductDetailsPage() {
                     <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rating</label>
                     <div className="flex gap-1 mt-2">
                        {[1, 2, 3, 4, 5].map((star) => (
-                         <Star 
-                           key={star} 
-                           className={`h-6 w-6 cursor-pointer transition-transform hover:scale-110 ${star <= reviewForm.rating ? "fill-amber-500 text-amber-500" : "fill-transparent text-muted-foreground"}`} 
-                           onClick={() => setReviewForm({ ...reviewForm, rating: star })}
-                         />
+                         <div key={star} className="relative cursor-pointer transition-transform hover:scale-110" style={{ width: 24, height: 24 }}>
+                           <Star className="absolute inset-0 text-muted-foreground/30 fill-transparent pointer-events-none" style={{ width: 24, height: 24 }} />
+                           <div className="absolute top-0 left-0 h-full overflow-hidden pointer-events-none" style={{ width: reviewForm.rating >= star ? '100%' : reviewForm.rating === star - 0.5 ? '50%' : '0%' }}>
+                             <Star className="text-amber-500 fill-amber-500" style={{ width: 24, height: 24, maxWidth: 'none' }} />
+                           </div>
+                           <div className="absolute left-0 top-0 w-1/2 h-full z-10" onClick={() => setReviewForm({ ...reviewForm, rating: star - 0.5 })} />
+                           <div className="absolute right-0 top-0 w-1/2 h-full z-10" onClick={() => setReviewForm({ ...reviewForm, rating: star })} />
+                         </div>
                        ))}
                     </div>
                   </div>
@@ -549,10 +564,8 @@ export default function ProductDetailsPage() {
                           <p className="font-bold">{review.author}</p>
                           <p className="text-xs text-muted-foreground">{new Date(review.createdAt).toLocaleDateString()}</p>
                         </div>
-                        <div className="flex text-amber-500">
-                          {[...Array(5)].map((_, i) => (
-                            <Star key={i} className={`h-3 w-3 ${i < review.rating ? "fill-current" : "fill-transparent border-amber-500 opacity-50"}`} />
-                          ))}
+                        <div>
+                          <StarRating rating={review.rating} size={14} />
                         </div>
                       </div>
                       <p className="text-muted-foreground leading-relaxed">{review.content}</p>
